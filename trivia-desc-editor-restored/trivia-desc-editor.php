@@ -1838,7 +1838,10 @@ add_action( 'wp_footer', function () {
 			try {
 				var parsed = new URL(url, window.location.origin);
 				if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
-				if (parsed.origin !== window.location.origin) return '';
+				if (parsed.hostname !== window.location.hostname) return '';
+				if (window.location.protocol === 'https:' && parsed.protocol === 'http:') {
+					parsed.protocol = 'https:';
+				}
 				return parsed.href;
 			} catch(e) {}
 			return '';
