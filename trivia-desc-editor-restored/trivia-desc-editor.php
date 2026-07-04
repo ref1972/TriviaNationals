@@ -2321,6 +2321,16 @@ function tn_tde_time_label( $event ) {
 	return $start ?: 'Time TBA';
 }
 
+function tn_tde_minutes_label( $minutes ) {
+	$minutes = max( 0, min( 1439, (int) $minutes ) );
+	$hours = (int) floor( $minutes / 60 );
+	$mins = $minutes % 60;
+	$meridian = $hours >= 12 ? 'PM' : 'AM';
+	$hour_12 = $hours % 12;
+	if ( $hour_12 === 0 ) $hour_12 = 12;
+	return sprintf( '%d:%02d %s', $hour_12, $mins, $meridian );
+}
+
 function tn_tde_render_full_schedule_shortcode() {
 	$events = tn_tde_get_home_schedule_events();
 	$days = tn_tde_day_definitions();
@@ -2329,13 +2339,29 @@ function tn_tde_render_full_schedule_shortcode() {
 		return '<p class="tn-full-schedule-empty">No schedule events are available yet.</p>';
 	}
 
-	$events_by_day_location = [];
+	$events_by_day = [];
 	foreach ( $events as $event ) {
 		$day = $event['day_id'];
-		$location = $event['location'] ?: 'breakout-rooms';
-		if ( ! isset( $events_by_day_location[ $day ] ) ) $events_by_day_location[ $day ] = [];
-		if ( ! isset( $events_by_day_location[ $day ][ $location ] ) ) $events_by_day_location[ $day ][ $location ] = [];
-		$events_by_day_location[ $day ][ $location ][] = $event;
+		if ( ! isset( $events_by_day[ $day ] ) ) {
+			$events_by_day[ $day ] = [
+				'timed' => [],
+				'unscheduled' => [],
+				'min' => null,
+				'max' => null,
+			];
+		}
+		if ( $event['start_minutes'] === null ) {
+			$events_by_day[ $day ]['unscheduled'][] = $event;
+			continue;
+		}
+		$end_minutes = tn_tde_parse_start_minutes( $event['end'] ?? '' );
+		if ( $end_minutes === null || $end_minutes <= $event['start_minutes'] ) {
+			$end_minutes = $event['start_minutes'] + 60;
+		}
+		$event['end_minutes'] = $end_minutes;
+		$events_by_day[ $day ]['timed'][] = $event;
+		$events_by_day[ $day ]['min'] = $events_by_day[ $day ]['min'] === null ? $event['start_minutes'] : min( $events_by_day[ $day ]['min'], $event['start_minutes'] );
+		$events_by_day[ $day ]['max'] = $events_by_day[ $day ]['max'] === null ? $end_minutes : max( $events_by_day[ $day ]['max'], $end_minutes );
 	}
 
 	ob_start();
@@ -2355,43 +2381,91 @@ function tn_tde_render_full_schedule_shortcode() {
 
 		<?php $panel_index = 0; foreach ( $days as $day_id => $day ) : ?>
 			<section class="tn-full-schedule-day<?php echo $panel_index === 0 ? ' is-active' : ''; ?>" data-day-panel="<?php echo esc_attr( $day_id ); ?>">
-				<div class="tn-full-schedule-grid" style="--tn-location-count: <?php echo esc_attr( count( $locations ) ); ?>">
-					<?php foreach ( $locations as $location_key => $location_label ) : ?>
-						<div class="tn-full-schedule-lane">
-							<h3><?php echo esc_html( $location_label ); ?></h3>
-							<div class="tn-full-schedule-events">
-								<?php $lane_events = $events_by_day_location[ $day_id ][ $location_key ] ?? []; ?>
-								<?php if ( empty( $lane_events ) ) : ?>
-									<p class="tn-full-schedule-none">No events scheduled.</p>
-								<?php else : ?>
-									<?php foreach ( $lane_events as $event ) : ?>
-										<?php
-										$modal_event = [
-											'title' => $event['title'],
-											'day' => $event['day_label'] . ', ' . $event['date_label'],
-											'time' => tn_tde_time_label( $event ),
-											'location' => $event['location_label'],
-											'category' => $event['category'],
-											'description' => wpautop( $event['description'] ),
-											'image' => $event['image'],
-											'imageAlt' => $event['image_alt'] ?: $event['title'],
-											'infoUrl' => $event['info_url'],
-											'presenters' => array_values( array_filter( array_map( function( $presenter ) {
-												return sanitize_text_field( $presenter['name'] ?? '' );
-											}, $event['presenters'] ?? [] ) ) ),
-										];
-										?>
-										<button type="button" class="tn-full-schedule-event <?php echo esc_attr( $event['category_class'] ); ?>" data-event="<?php echo esc_attr( wp_json_encode( $modal_event ) ); ?>">
-											<span class="tn-full-schedule-time"><?php echo esc_html( tn_tde_time_label( $event ) ); ?></span>
-											<span class="tn-full-schedule-title"><?php echo esc_html( $event['title'] ); ?></span>
-											<span class="tn-full-schedule-type"><?php echo esc_html( $event['category'] ); ?></span>
-										</button>
-									<?php endforeach; ?>
-								<?php endif; ?>
+				<?php
+				$day_events = $events_by_day[ $day_id ] ?? [ 'timed' => [], 'unscheduled' => [], 'min' => null, 'max' => null ];
+				$day_start = $day_events['min'] === null ? 9 * 60 : max( 0, floor( $day_events['min'] / 30 ) * 30 );
+				$day_end = $day_events['max'] === null ? 18 * 60 : min( 24 * 60, ceil( $day_events['max'] / 30 ) * 30 );
+				if ( $day_end <= $day_start ) $day_end = $day_start + 60;
+				$slot_count = max( 2, (int) ceil( ( $day_end - $day_start ) / 30 ) );
+				$location_keys = array_keys( $locations );
+				?>
+				<div class="tn-full-schedule-timeline-wrap">
+					<div class="tn-full-schedule-locations" style="--tn-location-count: <?php echo esc_attr( count( $locations ) ); ?>">
+						<div class="tn-full-schedule-time-spacer"></div>
+						<?php foreach ( $locations as $location_label ) : ?>
+							<div class="tn-full-schedule-location-head"><?php echo esc_html( $location_label ); ?></div>
+						<?php endforeach; ?>
+					</div>
+					<div class="tn-full-schedule-timeline" style="--tn-location-count: <?php echo esc_attr( count( $locations ) ); ?>; --tn-slot-count: <?php echo esc_attr( $slot_count ); ?>;">
+						<?php for ( $slot = 0; $slot <= $slot_count; $slot += 2 ) : ?>
+							<?php $minutes = $day_start + ( $slot * 30 ); ?>
+							<div class="tn-full-schedule-time-marker" style="grid-row: <?php echo esc_attr( $slot + 1 ); ?>;">
+								<?php echo esc_html( tn_tde_minutes_label( $minutes ) ); ?>
 							</div>
-						</div>
-					<?php endforeach; ?>
+						<?php endfor; ?>
+						<?php $lane_index = 0; foreach ( $locations as $location_key => $location_label ) : ?>
+							<div class="tn-full-schedule-lane-bg" style="grid-column: <?php echo esc_attr( $lane_index + 2 ); ?>; grid-row: 1 / span <?php echo esc_attr( $slot_count ); ?>;" aria-hidden="true"></div>
+						<?php $lane_index++; endforeach; ?>
+						<?php foreach ( $day_events['timed'] as $event ) : ?>
+							<?php
+							$location_key = $event['location'] ?: 'breakout-rooms';
+							$location_index = array_search( $location_key, $location_keys, true );
+							if ( $location_index === false ) $location_index = count( $location_keys ) - 1;
+							$row_start = max( 1, (int) floor( ( $event['start_minutes'] - $day_start ) / 30 ) + 1 );
+							$row_span = max( 1, (int) ceil( ( $event['end_minutes'] - $event['start_minutes'] ) / 30 ) );
+							$modal_event = [
+								'title' => $event['title'],
+								'day' => $event['day_label'] . ', ' . $event['date_label'],
+								'time' => tn_tde_time_label( $event ),
+								'location' => $event['location_label'],
+								'category' => $event['category'],
+								'description' => wpautop( $event['description'] ),
+								'image' => $event['image'],
+								'imageAlt' => $event['image_alt'] ?: $event['title'],
+								'infoUrl' => $event['info_url'],
+								'presenters' => array_values( array_filter( array_map( function( $presenter ) {
+									return sanitize_text_field( $presenter['name'] ?? '' );
+								}, $event['presenters'] ?? [] ) ) ),
+							];
+							?>
+							<button type="button" class="tn-full-schedule-event <?php echo esc_attr( $event['category_class'] ); ?>" style="grid-column: <?php echo esc_attr( $location_index + 2 ); ?>; grid-row: <?php echo esc_attr( $row_start ); ?> / span <?php echo esc_attr( $row_span ); ?>;" data-event="<?php echo esc_attr( wp_json_encode( $modal_event ) ); ?>">
+								<span class="tn-full-schedule-time"><?php echo esc_html( tn_tde_time_label( $event ) ); ?></span>
+								<span class="tn-full-schedule-title"><?php echo esc_html( $event['title'] ); ?></span>
+								<span class="tn-full-schedule-type"><?php echo esc_html( $event['category'] ); ?></span>
+							</button>
+						<?php endforeach; ?>
+					</div>
 				</div>
+				<?php if ( ! empty( $day_events['unscheduled'] ) ) : ?>
+					<div class="tn-full-schedule-unscheduled">
+						<h3>Time TBA</h3>
+						<div class="tn-full-schedule-unscheduled-list">
+							<?php foreach ( $day_events['unscheduled'] as $event ) : ?>
+								<?php
+								$modal_event = [
+									'title' => $event['title'],
+									'day' => $event['day_label'] . ', ' . $event['date_label'],
+									'time' => tn_tde_time_label( $event ),
+									'location' => $event['location_label'],
+									'category' => $event['category'],
+									'description' => wpautop( $event['description'] ),
+									'image' => $event['image'],
+									'imageAlt' => $event['image_alt'] ?: $event['title'],
+									'infoUrl' => $event['info_url'],
+									'presenters' => array_values( array_filter( array_map( function( $presenter ) {
+										return sanitize_text_field( $presenter['name'] ?? '' );
+									}, $event['presenters'] ?? [] ) ) ),
+								];
+								?>
+								<button type="button" class="tn-full-schedule-event tn-full-schedule-event-unscheduled <?php echo esc_attr( $event['category_class'] ); ?>" data-event="<?php echo esc_attr( wp_json_encode( $modal_event ) ); ?>">
+									<span class="tn-full-schedule-time"><?php echo esc_html( tn_tde_time_label( $event ) ); ?> · <?php echo esc_html( $event['location_label'] ); ?></span>
+									<span class="tn-full-schedule-title"><?php echo esc_html( $event['title'] ); ?></span>
+									<span class="tn-full-schedule-type"><?php echo esc_html( $event['category'] ); ?></span>
+								</button>
+							<?php endforeach; ?>
+						</div>
+					</div>
+				<?php endif; ?>
 			</section>
 		<?php $panel_index++; endforeach; ?>
 
@@ -2454,47 +2528,103 @@ function tn_tde_render_full_schedule_shortcode() {
 	.tn-full-schedule-tab.is-active { border-color: rgba(0,229,255,0.55); background: rgba(0,229,255,0.12); }
 	.tn-full-schedule-day { display: none; }
 	.tn-full-schedule-day.is-active { display: block; }
-	.tn-full-schedule-grid {
-		display: grid;
-		grid-template-columns: repeat(var(--tn-location-count), minmax(210px, 1fr));
-		gap: 0.75rem;
+	.tn-full-schedule-timeline-wrap {
 		overflow-x: auto;
-		padding-bottom: 0.35rem;
+		padding-bottom: 0.5rem;
 	}
-	.tn-full-schedule-lane {
-		min-width: 210px;
+	.tn-full-schedule-locations,
+	.tn-full-schedule-timeline {
+		display: grid;
+		grid-template-columns: 74px repeat(var(--tn-location-count), minmax(190px, 1fr));
+		min-width: 1060px;
+	}
+	.tn-full-schedule-locations {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		background: var(--tn-grid-bg);
 		border: 1px solid var(--tn-grid-line);
 		border-radius: 8px;
-		background: rgba(255,255,255,0.045);
 		overflow: hidden;
+		margin-bottom: 0.5rem;
 	}
-	.tn-full-schedule-lane h3 {
-		margin: 0;
+	.tn-full-schedule-time-spacer,
+	.tn-full-schedule-location-head {
 		padding: 0.8rem 0.85rem;
-		border-bottom: 1px solid var(--tn-grid-line);
+		border-right: 1px solid var(--tn-grid-line);
+		background: rgba(255,255,255,0.06);
+	}
+	.tn-full-schedule-location-head {
 		font-family: Outfit, sans-serif;
 		font-size: 0.82rem;
+		font-weight: 900;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}
-	.tn-full-schedule-events { display: grid; gap: 0.55rem; padding: 0.65rem; }
+	.tn-full-schedule-location-head:last-child { border-right: 0; }
+	.tn-full-schedule-timeline {
+		position: relative;
+		grid-template-rows: repeat(var(--tn-slot-count), minmax(42px, auto));
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 8px;
+		background:
+			repeating-linear-gradient(to bottom, rgba(255,255,255,0.09) 0 1px, transparent 1px 42px),
+			rgba(255,255,255,0.035);
+		overflow: hidden;
+	}
+	.tn-full-schedule-time-marker {
+		grid-column: 1;
+		align-self: start;
+		padding: 0.25rem 0.45rem 0 0;
+		color: var(--tn-grid-muted);
+		font-size: 0.72rem;
+		font-weight: 800;
+		text-align: right;
+	}
+	.tn-full-schedule-lane-bg {
+		border-left: 1px solid var(--tn-grid-line);
+		background: rgba(255,255,255,0.025);
+		pointer-events: none;
+	}
 	.tn-full-schedule-event {
 		display: grid;
 		gap: 0.3rem;
-		width: 100%;
+		align-content: start;
 		border: 1px solid rgba(255,255,255,0.12);
 		border-radius: 8px;
 		background: var(--tn-grid-panel);
 		color: var(--tn-grid-text);
 		cursor: pointer;
-		padding: 0.8rem;
+		margin: 0.25rem;
+		min-height: 36px;
+		overflow: hidden;
+		padding: 0.58rem 0.65rem;
 		text-align: left;
 	}
 	.tn-full-schedule-event:hover { border-color: rgba(0,229,255,0.45); transform: translateY(-1px); }
-	.tn-full-schedule-time { color: var(--tn-grid-cyan); font-size: 0.78rem; font-weight: 900; }
-	.tn-full-schedule-title { font-family: Outfit, sans-serif; font-size: 1rem; font-weight: 900; line-height: 1.08; }
-	.tn-full-schedule-type { width: fit-content; color: var(--tn-grid-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
-	.tn-full-schedule-none { margin: 0; color: var(--tn-grid-muted); font-size: 0.85rem; }
+	.tn-full-schedule-time { color: var(--tn-grid-cyan); font-size: 0.72rem; font-weight: 900; }
+	.tn-full-schedule-title { font-family: Outfit, sans-serif; font-size: 0.94rem; font-weight: 900; line-height: 1.05; }
+	.tn-full-schedule-type { width: fit-content; color: var(--tn-grid-muted); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+	.tn-full-schedule-unscheduled {
+		margin-top: 1rem;
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 8px;
+		background: rgba(255,255,255,0.045);
+		padding: 0.85rem;
+	}
+	.tn-full-schedule-unscheduled h3 {
+		margin: 0 0 0.7rem;
+		font-family: Outfit, sans-serif;
+		font-size: 0.9rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-unscheduled-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+		gap: 0.55rem;
+	}
+	.tn-full-schedule-event-unscheduled { margin: 0; }
 	.tn-full-schedule-modal {
 		position: fixed;
 		inset: 0;
@@ -2566,11 +2696,19 @@ function tn_tde_render_full_schedule_shortcode() {
 		text-transform: uppercase;
 	}
 	@media (max-width: 900px) {
-		.tn-full-schedule-grid { grid-template-columns: repeat(2, minmax(230px, 1fr)); }
+		.tn-full-schedule-locations,
+		.tn-full-schedule-timeline {
+			grid-template-columns: 64px repeat(var(--tn-location-count), minmax(175px, 1fr));
+			min-width: 940px;
+		}
 	}
 	@media (max-width: 560px) {
-		.tn-full-schedule-grid { grid-template-columns: 1fr; overflow-x: visible; }
-		.tn-full-schedule-lane { min-width: 0; }
+		.tn-full-schedule-locations,
+		.tn-full-schedule-timeline {
+			grid-template-columns: 58px repeat(var(--tn-location-count), minmax(155px, 1fr));
+			min-width: 835px;
+		}
+		.tn-full-schedule-location-head { font-size: 0.72rem; padding: 0.7rem 0.6rem; }
 	}
 	</style>
 	<script>
