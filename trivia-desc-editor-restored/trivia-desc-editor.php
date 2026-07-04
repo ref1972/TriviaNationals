@@ -1705,9 +1705,11 @@ add_action( 'wp_footer', function () {
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 	}
-	#modal-desc .tn-event-modal-graphic {
+	#modal-desc .tn-event-modal-graphic,
+	#modal-desc img {
 		display: block;
 		width: 100%;
+		max-width: 100%;
 		height: auto;
 		margin: 0 0 1rem;
 		border-radius: 10px;
@@ -1750,9 +1752,11 @@ add_action( 'wp_footer', function () {
 			-webkit-overflow-scrolling: touch;
 			padding-right: 0.2rem;
 		}
-		#modal-desc .tn-event-modal-graphic {
+		#modal-desc .tn-event-modal-graphic,
+		#modal-desc img {
 			display: block;
 			width: 100%;
+			max-width: 100%;
 			height: auto;
 			margin: 0 0 1rem;
 			border-radius: 10px;
@@ -1862,7 +1866,7 @@ add_action( 'wp_footer', function () {
 		}
 
 		function formatEventDescription(desc) {
-			var allowedInline = { A: true, STRONG: true, B: true, EM: true, I: true, U: true, BR: true, P: true, UL: true, OL: true, LI: true };
+			var allowedInline = { A: true, STRONG: true, B: true, EM: true, I: true, U: true, BR: true, P: true, UL: true, OL: true, LI: true, IMG: true };
 			var template = document.createElement('template');
 			template.innerHTML = desc || '';
 
@@ -1884,9 +1888,10 @@ add_action( 'wp_footer', function () {
 						return;
 					}
 					Array.from(child.attributes).forEach(function(attr) {
-						if (child.tagName !== 'A' || attr.name.toLowerCase() !== 'href') {
-							child.removeAttribute(attr.name);
-						}
+						var name = attr.name.toLowerCase();
+						if (child.tagName === 'A' && name === 'href') return;
+						if (child.tagName === 'IMG' && ['src','alt','width','height','class'].indexOf(name) !== -1) return;
+						child.removeAttribute(attr.name);
 					});
 					if (child.tagName === 'A') {
 						var href = child.getAttribute('href') || '';
@@ -1895,6 +1900,13 @@ add_action( 'wp_footer', function () {
 							return;
 						}
 						prepareLink(child, href);
+					}
+					if (child.tagName === 'IMG') {
+						var src = child.getAttribute('src') || '';
+						if (!/^https?:/i.test(src)) {
+							child.remove();
+							return;
+						}
 					}
 					clean(child);
 				});
@@ -1921,10 +1933,10 @@ add_action( 'wp_footer', function () {
 
 		var originalOpen = window.openEventModal;
 		window.openEventModal = function(title, tagLabel, tagClass, desc, infoUrl, imageUrl, imageAlt) {
-			if (typeof originalOpen === 'function') {
-				originalOpen(title, tagLabel, tagClass, desc);
-			} else {
+			if (document.getElementById('event-modal')) {
 				openModalFallback(title, tagLabel, tagClass, desc);
+			} else if (typeof originalOpen === 'function') {
+				originalOpen(title, tagLabel, tagClass, desc);
 			}
 			setMoreButton(infoUrl);
 			setModalGraphic(imageUrl, imageAlt || title);
@@ -1986,6 +1998,153 @@ function tn_tde_find_home_schedule_html( $nodes ) {
 		}
 	}
 	return '';
+}
+
+function tn_tde_day_definitions() {
+	return [
+		'day-friday'   => [ 'label' => 'Friday', 'date' => 'August 7, 2026', 'iso' => '2026-08-07' ],
+		'day-saturday' => [ 'label' => 'Saturday', 'date' => 'August 8, 2026', 'iso' => '2026-08-08' ],
+		'day-sunday'   => [ 'label' => 'Sunday', 'date' => 'August 9, 2026', 'iso' => '2026-08-09' ],
+	];
+}
+
+function tn_tde_location_options() {
+	return [
+		'office-registration-foyer' => 'Office/Registration Foyer',
+		'grand-ballroom-a'          => 'Grand Ballroom A',
+		'sonoma-a'                  => 'Sonoma A',
+		'sonoma-b'                  => 'Sonoma B',
+		'breakout-rooms'            => 'Breakout Rooms',
+	];
+}
+
+function tn_tde_normalize_location( $value ) {
+	$value = sanitize_title( (string) $value );
+	$options = tn_tde_location_options();
+	return isset( $options[ $value ] ) ? $value : '';
+}
+
+function tn_tde_location_label( $value ) {
+	$options = tn_tde_location_options();
+	$key = tn_tde_normalize_location( $value );
+	return $key && isset( $options[ $key ] ) ? $options[ $key ] : 'Location TBA';
+}
+
+function tn_tde_parse_start_minutes( $value ) {
+	$value = strtolower( trim( (string) $value ) );
+	if ( $value === '' ) return null;
+	if ( ! preg_match( '/^(\d{1,2})(?::(\d{2}))?\s*(a|am|p|pm)?$/', $value, $match ) ) return null;
+	$hours = absint( $match[1] );
+	$mins = isset( $match[2] ) && $match[2] !== '' ? absint( $match[2] ) : 0;
+	$meridian = $match[3] ?? '';
+	if ( $hours > 24 || $mins > 59 ) return null;
+	if ( $meridian && $meridian[0] === 'p' && $hours < 12 ) $hours += 12;
+	if ( $meridian && $meridian[0] === 'a' && $hours === 12 ) $hours = 0;
+	return ( $hours * 60 ) + $mins;
+}
+
+function tn_tde_allowed_description_html() {
+	return [
+		'a'      => [ 'href' => true, 'target' => true, 'rel' => true ],
+		'br'     => [],
+		'strong' => [],
+		'b'      => [],
+		'em'     => [],
+		'i'      => [],
+		'u'      => [],
+		'p'      => [],
+		'ul'     => [],
+		'ol'     => [],
+		'li'     => [],
+		'img'    => [
+			'src' => true,
+			'alt' => true,
+			'width' => true,
+			'height' => true,
+			'class' => true,
+		],
+	];
+}
+
+function tn_tde_clean_description_html( $html ) {
+	$html = (string) $html;
+	$html = wp_kses( $html, tn_tde_allowed_description_html() );
+	$html = preg_replace_callback( '/<a\s+([^>]*href=[^>]*)>/i', function( $match ) {
+		$tag = $match[0];
+		if ( stripos( $tag, 'rel=' ) === false ) {
+			$tag = rtrim( $tag, '>' ) . ' rel="noopener noreferrer">';
+		}
+		return $tag;
+	}, $html );
+	return $html;
+}
+
+function tn_tde_get_home_schedule_events() {
+	$raw = get_post_meta( 5, '_elementor_data', true );
+	if ( ! $raw ) return [];
+	$data = json_decode( $raw, true );
+	if ( ! $data ) return [];
+	$html = tn_tde_find_home_schedule_html( is_array( $data ) ? $data : [ $data ] );
+	if ( ! $html || ! class_exists( 'DOMDocument' ) ) return [];
+
+	libxml_use_internal_errors( true );
+	$dom = new DOMDocument();
+	$dom->loadHTML( '<?xml encoding="utf-8" ?>' . $html );
+	libxml_clear_errors();
+	$xpath = new DOMXPath( $dom );
+
+	$events = [];
+	$days = tn_tde_day_definitions();
+	foreach ( $xpath->query( '//*[contains(concat(" ", normalize-space(@class), " "), " schedule-item ")]' ) as $item ) {
+		$day_id = '';
+		for ( $node = $item; $node; $node = $node->parentNode ) {
+			if ( ! method_exists( $node, 'getAttribute' ) ) continue;
+			$id = $node->getAttribute( 'id' );
+			if ( isset( $days[ $id ] ) ) {
+				$day_id = $id;
+				break;
+			}
+		}
+		if ( ! $day_id ) continue;
+		$json = html_entity_decode( $item->getAttribute( 'data-presenters' ), ENT_QUOTES, 'UTF-8' );
+		$presenters = json_decode( $json, true );
+		$start = sanitize_text_field( $item->getAttribute( 'data-start' ) );
+		$end = sanitize_text_field( $item->getAttribute( 'data-end' ) );
+		$location = tn_tde_normalize_location( $item->getAttribute( 'data-location' ) );
+		$events[] = [
+			'day_id' => $day_id,
+			'day_label' => $days[ $day_id ]['label'],
+			'date_label' => $days[ $day_id ]['date'],
+			'date_iso' => $days[ $day_id ]['iso'],
+			'title' => sanitize_text_field( $item->getAttribute( 'data-title' ) ),
+			'description' => tn_tde_clean_description_html( html_entity_decode( $item->getAttribute( 'data-desc' ), ENT_QUOTES, 'UTF-8' ) ),
+			'image' => esc_url_raw( $item->getAttribute( 'data-image' ) ),
+			'image_alt' => sanitize_text_field( $item->getAttribute( 'data-image-alt' ) ),
+			'info_url' => esc_url_raw( $item->getAttribute( 'data-info-url' ) ),
+			'category' => sanitize_text_field( $item->getAttribute( 'data-tag-label' ) ) ?: 'Event',
+			'category_class' => sanitize_html_class( $item->getAttribute( 'data-tag-class' ) ?: 'tag-special' ),
+			'start' => $start,
+			'end' => $end,
+			'start_minutes' => tn_tde_parse_start_minutes( $start ),
+			'location' => $location,
+			'location_label' => tn_tde_location_label( $location ),
+			'presenters' => tn_tde_clean_presenters( $presenters ),
+		];
+	}
+
+	usort( $events, function( $a, $b ) {
+		$days = array_keys( tn_tde_day_definitions() );
+		$day_cmp = array_search( $a['day_id'], $days, true ) <=> array_search( $b['day_id'], $days, true );
+		if ( $day_cmp !== 0 ) return $day_cmp;
+		$at = $a['start_minutes'];
+		$bt = $b['start_minutes'];
+		if ( $at === null && $bt === null ) return 0;
+		if ( $at === null ) return 1;
+		if ( $bt === null ) return -1;
+		return $at <=> $bt;
+	} );
+
+	return $events;
 }
 
 function tn_tde_clean_presenters( $presenters ) {
@@ -2051,6 +2210,8 @@ function tn_tde_get_event_data_for_current_page() {
 			'day'        => tn_tde_day_label_from_item( $item ) ?: 'Day TBA',
 			'time'       => $time,
 			'has_time'   => (bool) $start,
+			'location'   => tn_tde_location_label( $item->getAttribute( 'data-location' ) ),
+			'has_location' => (bool) tn_tde_normalize_location( $item->getAttribute( 'data-location' ) ),
 			'category'   => sanitize_text_field( $item->getAttribute( 'data-tag-label' ) ) ?: 'Event',
 			'presenters' => tn_tde_clean_presenters( $presenters ),
 		];
@@ -2076,6 +2237,7 @@ add_action( 'wp_footer', function () {
 		'title'     => $event['title'] ?: get_the_title(),
 		'day'       => $event['day'] ?: 'Day TBA',
 		'time'      => $schedule_mode && ! empty( $event['has_time'] ) ? ( $event['time'] ?: 'Time TBA' ) : '',
+		'location'  => ! empty( $event['has_location'] ) ? ( $event['location'] ?: 'Location TBA' ) : '',
 		'category'  => $event['category'] ?: 'Event',
 		'presenter' => $presenter_label,
 	];
@@ -2107,6 +2269,7 @@ add_action( 'wp_footer', function () {
 				'<dl class="tn-event-facts-list">' +
 					'<div class="tn-event-fact"><dt>Day</dt><dd>' + esc(facts.day) + '</dd></div>' +
 					(facts.time ? '<div class="tn-event-fact"><dt>Time</dt><dd>' + esc(facts.time) + '</dd></div>' : '') +
+					(facts.location ? '<div class="tn-event-fact"><dt>Location</dt><dd>' + esc(facts.location) + '</dd></div>' : '') +
 					'<div class="tn-event-fact"><dt>Type</dt><dd>' + esc(facts.category) + '</dd></div>' +
 					'<div class="tn-event-fact"><dt>Hosts</dt><dd>' + esc(facts.presenter) + '</dd></div>' +
 				'</dl>';
@@ -2148,6 +2311,354 @@ add_action( 'wp_footer', function () {
 	</section>
 	<?php
 }, 8 );
+
+// ─── Shortcode: Full schedule grid ──────────────────────────────────────────
+
+function tn_tde_time_label( $event ) {
+	$start = trim( (string) ( $event['start'] ?? '' ) );
+	$end = trim( (string) ( $event['end'] ?? '' ) );
+	if ( $start && $end ) return $start . ' - ' . $end;
+	return $start ?: 'Time TBA';
+}
+
+function tn_tde_render_full_schedule_shortcode() {
+	$events = tn_tde_get_home_schedule_events();
+	$days = tn_tde_day_definitions();
+	$locations = tn_tde_location_options();
+	if ( empty( $events ) ) {
+		return '<p class="tn-full-schedule-empty">No schedule events are available yet.</p>';
+	}
+
+	$events_by_day_location = [];
+	foreach ( $events as $event ) {
+		$day = $event['day_id'];
+		$location = $event['location'] ?: 'breakout-rooms';
+		if ( ! isset( $events_by_day_location[ $day ] ) ) $events_by_day_location[ $day ] = [];
+		if ( ! isset( $events_by_day_location[ $day ][ $location ] ) ) $events_by_day_location[ $day ][ $location ] = [];
+		$events_by_day_location[ $day ][ $location ][] = $event;
+	}
+
+	ob_start();
+	?>
+	<div class="tn-full-schedule" data-tn-full-schedule>
+		<div class="tn-full-schedule-head">
+			<h2>Trivia Nationals Schedule</h2>
+			<div class="tn-full-schedule-tabs" role="tablist" aria-label="Schedule days">
+				<?php $tab_index = 0; foreach ( $days as $day_id => $day ) : ?>
+					<button type="button" class="tn-full-schedule-tab<?php echo $tab_index === 0 ? ' is-active' : ''; ?>" data-day="<?php echo esc_attr( $day_id ); ?>" role="tab" aria-selected="<?php echo $tab_index === 0 ? 'true' : 'false'; ?>">
+						<span><?php echo esc_html( $day['label'] ); ?></span>
+						<small><?php echo esc_html( $day['date'] ); ?></small>
+					</button>
+				<?php $tab_index++; endforeach; ?>
+			</div>
+		</div>
+
+		<?php $panel_index = 0; foreach ( $days as $day_id => $day ) : ?>
+			<section class="tn-full-schedule-day<?php echo $panel_index === 0 ? ' is-active' : ''; ?>" data-day-panel="<?php echo esc_attr( $day_id ); ?>">
+				<div class="tn-full-schedule-grid" style="--tn-location-count: <?php echo esc_attr( count( $locations ) ); ?>">
+					<?php foreach ( $locations as $location_key => $location_label ) : ?>
+						<div class="tn-full-schedule-lane">
+							<h3><?php echo esc_html( $location_label ); ?></h3>
+							<div class="tn-full-schedule-events">
+								<?php $lane_events = $events_by_day_location[ $day_id ][ $location_key ] ?? []; ?>
+								<?php if ( empty( $lane_events ) ) : ?>
+									<p class="tn-full-schedule-none">No events scheduled.</p>
+								<?php else : ?>
+									<?php foreach ( $lane_events as $event ) : ?>
+										<?php
+										$modal_event = [
+											'title' => $event['title'],
+											'day' => $event['day_label'] . ', ' . $event['date_label'],
+											'time' => tn_tde_time_label( $event ),
+											'location' => $event['location_label'],
+											'category' => $event['category'],
+											'description' => wpautop( $event['description'] ),
+											'image' => $event['image'],
+											'imageAlt' => $event['image_alt'] ?: $event['title'],
+											'infoUrl' => $event['info_url'],
+											'presenters' => array_values( array_filter( array_map( function( $presenter ) {
+												return sanitize_text_field( $presenter['name'] ?? '' );
+											}, $event['presenters'] ?? [] ) ) ),
+										];
+										?>
+										<button type="button" class="tn-full-schedule-event <?php echo esc_attr( $event['category_class'] ); ?>" data-event="<?php echo esc_attr( wp_json_encode( $modal_event ) ); ?>">
+											<span class="tn-full-schedule-time"><?php echo esc_html( tn_tde_time_label( $event ) ); ?></span>
+											<span class="tn-full-schedule-title"><?php echo esc_html( $event['title'] ); ?></span>
+											<span class="tn-full-schedule-type"><?php echo esc_html( $event['category'] ); ?></span>
+										</button>
+									<?php endforeach; ?>
+								<?php endif; ?>
+							</div>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			</section>
+		<?php $panel_index++; endforeach; ?>
+
+		<div class="tn-full-schedule-modal" aria-hidden="true">
+			<div class="tn-full-schedule-backdrop" data-tn-schedule-close></div>
+			<article class="tn-full-schedule-dialog" role="dialog" aria-modal="true" aria-labelledby="tn-full-schedule-modal-title">
+				<button type="button" class="tn-full-schedule-close" data-tn-schedule-close aria-label="Close schedule event">×</button>
+				<p class="tn-full-schedule-modal-kicker" data-modal-meta></p>
+				<h2 id="tn-full-schedule-modal-title" data-modal-title></h2>
+				<div class="tn-full-schedule-modal-facts">
+					<span data-modal-time></span>
+					<span data-modal-location></span>
+					<span data-modal-category></span>
+				</div>
+				<img class="tn-full-schedule-modal-image" data-modal-image alt="" hidden>
+				<div class="tn-full-schedule-modal-desc" data-modal-desc></div>
+				<p class="tn-full-schedule-modal-presenters" data-modal-presenters hidden></p>
+				<a class="tn-full-schedule-modal-link" data-modal-link hidden>More Info</a>
+			</article>
+		</div>
+	</div>
+	<style>
+	.tn-full-schedule {
+		--tn-grid-bg: #070812;
+		--tn-grid-panel: rgba(17,21,37,0.88);
+		--tn-grid-line: rgba(255,255,255,0.13);
+		--tn-grid-text: #f7f8ff;
+		--tn-grid-muted: #aeb4c6;
+		--tn-grid-cyan: #00e5ff;
+		--tn-grid-pink: #ff2d95;
+		color: var(--tn-grid-text);
+		background:
+			radial-gradient(circle at 14% 10%, rgba(0,229,255,0.16), transparent 26rem),
+			radial-gradient(circle at 88% 8%, rgba(255,45,149,0.13), transparent 28rem),
+			var(--tn-grid-bg);
+		border-radius: 8px;
+		padding: clamp(1rem, 3vw, 2rem);
+		font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	.tn-full-schedule-head { display: grid; gap: 1rem; margin-bottom: 1rem; }
+	.tn-full-schedule-head h2 {
+		margin: 0;
+		font-family: Outfit, sans-serif;
+		font-size: clamp(2rem, 5vw, 4rem);
+		line-height: 0.95;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+	.tn-full-schedule-tab {
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 8px;
+		background: rgba(255,255,255,0.06);
+		color: var(--tn-grid-text);
+		cursor: pointer;
+		padding: 0.75rem 1rem;
+		text-align: left;
+	}
+	.tn-full-schedule-tab span { display: block; font-weight: 900; text-transform: uppercase; }
+	.tn-full-schedule-tab small { color: var(--tn-grid-muted); }
+	.tn-full-schedule-tab.is-active { border-color: rgba(0,229,255,0.55); background: rgba(0,229,255,0.12); }
+	.tn-full-schedule-day { display: none; }
+	.tn-full-schedule-day.is-active { display: block; }
+	.tn-full-schedule-grid {
+		display: grid;
+		grid-template-columns: repeat(var(--tn-location-count), minmax(210px, 1fr));
+		gap: 0.75rem;
+		overflow-x: auto;
+		padding-bottom: 0.35rem;
+	}
+	.tn-full-schedule-lane {
+		min-width: 210px;
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 8px;
+		background: rgba(255,255,255,0.045);
+		overflow: hidden;
+	}
+	.tn-full-schedule-lane h3 {
+		margin: 0;
+		padding: 0.8rem 0.85rem;
+		border-bottom: 1px solid var(--tn-grid-line);
+		font-family: Outfit, sans-serif;
+		font-size: 0.82rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-events { display: grid; gap: 0.55rem; padding: 0.65rem; }
+	.tn-full-schedule-event {
+		display: grid;
+		gap: 0.3rem;
+		width: 100%;
+		border: 1px solid rgba(255,255,255,0.12);
+		border-radius: 8px;
+		background: var(--tn-grid-panel);
+		color: var(--tn-grid-text);
+		cursor: pointer;
+		padding: 0.8rem;
+		text-align: left;
+	}
+	.tn-full-schedule-event:hover { border-color: rgba(0,229,255,0.45); transform: translateY(-1px); }
+	.tn-full-schedule-time { color: var(--tn-grid-cyan); font-size: 0.78rem; font-weight: 900; }
+	.tn-full-schedule-title { font-family: Outfit, sans-serif; font-size: 1rem; font-weight: 900; line-height: 1.08; }
+	.tn-full-schedule-type { width: fit-content; color: var(--tn-grid-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+	.tn-full-schedule-none { margin: 0; color: var(--tn-grid-muted); font-size: 0.85rem; }
+	.tn-full-schedule-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 100000;
+		display: none;
+		place-items: center;
+		padding: 1rem;
+	}
+	.tn-full-schedule-modal.is-open { display: grid; }
+	.tn-full-schedule-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.72); }
+	.tn-full-schedule-dialog {
+		position: relative;
+		width: min(720px, 100%);
+		max-height: min(88vh, 780px);
+		overflow-y: auto;
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 8px;
+		background: #111525;
+		box-shadow: 0 28px 90px rgba(0,0,0,0.5);
+		padding: clamp(1.25rem, 3vw, 2rem);
+	}
+	.tn-full-schedule-close {
+		position: absolute;
+		top: 0.75rem;
+		right: 0.75rem;
+		width: 36px;
+		height: 36px;
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 999px;
+		background: rgba(255,255,255,0.08);
+		color: var(--tn-grid-text);
+		cursor: pointer;
+		font-size: 1.5rem;
+		line-height: 1;
+	}
+	.tn-full-schedule-modal-kicker { margin: 0 2.5rem 0.5rem 0; color: var(--tn-grid-cyan); font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+	.tn-full-schedule-dialog h2 { margin: 0 2.5rem 0.85rem 0; font-family: Outfit, sans-serif; font-size: clamp(1.8rem, 5vw, 3.2rem); line-height: 0.95; }
+	.tn-full-schedule-modal-facts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+	.tn-full-schedule-modal-facts span {
+		border: 1px solid var(--tn-grid-line);
+		border-radius: 999px;
+		color: var(--tn-grid-muted);
+		padding: 0.35rem 0.65rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.tn-full-schedule-modal-image,
+	.tn-full-schedule-modal-desc img {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		border-radius: 8px;
+		margin: 0 0 1rem;
+	}
+	.tn-full-schedule-modal-desc { color: var(--tn-grid-text); line-height: 1.7; }
+	.tn-full-schedule-modal-desc a { color: var(--tn-grid-cyan); }
+	.tn-full-schedule-modal-presenters { color: var(--tn-grid-muted); font-weight: 700; }
+	.tn-full-schedule-modal-link {
+		display: inline-flex;
+		margin-top: 1rem;
+		border-radius: 999px;
+		background: linear-gradient(135deg, var(--tn-grid-cyan), var(--tn-grid-pink));
+		color: #fff;
+		font-family: Outfit, sans-serif;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		padding: 0.75rem 1rem;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+	@media (max-width: 900px) {
+		.tn-full-schedule-grid { grid-template-columns: repeat(2, minmax(230px, 1fr)); }
+	}
+	@media (max-width: 560px) {
+		.tn-full-schedule-grid { grid-template-columns: 1fr; overflow-x: visible; }
+		.tn-full-schedule-lane { min-width: 0; }
+	}
+	</style>
+	<script>
+	(function(){
+		document.querySelectorAll('[data-tn-full-schedule]').forEach(function(root) {
+			var tabs = Array.from(root.querySelectorAll('.tn-full-schedule-tab'));
+			var panels = Array.from(root.querySelectorAll('.tn-full-schedule-day'));
+			var modal = root.querySelector('.tn-full-schedule-modal');
+			if (!modal) return;
+			function setDay(day) {
+				tabs.forEach(function(tab) {
+					var active = tab.getAttribute('data-day') === day;
+					tab.classList.toggle('is-active', active);
+					tab.setAttribute('aria-selected', active ? 'true' : 'false');
+				});
+				panels.forEach(function(panel) {
+					panel.classList.toggle('is-active', panel.getAttribute('data-day-panel') === day);
+				});
+			}
+			function setText(selector, value) {
+				var el = modal.querySelector(selector);
+				if (el) el.textContent = value || '';
+			}
+			function open(event) {
+				setText('[data-modal-meta]', event.day || '');
+				setText('[data-modal-title]', event.title || '');
+				setText('[data-modal-time]', event.time || 'Time TBA');
+				setText('[data-modal-location]', event.location || 'Location TBA');
+				setText('[data-modal-category]', event.category || 'Event');
+				var desc = modal.querySelector('[data-modal-desc]');
+				if (desc) desc.innerHTML = event.description || '';
+				var img = modal.querySelector('[data-modal-image]');
+				if (img) {
+					if (event.image) {
+						img.src = event.image;
+						img.alt = event.imageAlt || event.title || '';
+						img.hidden = false;
+					} else {
+						img.removeAttribute('src');
+						img.hidden = true;
+					}
+				}
+				var presenters = modal.querySelector('[data-modal-presenters]');
+				if (presenters) {
+					var names = Array.isArray(event.presenters) ? event.presenters.filter(Boolean) : [];
+					presenters.textContent = names.length ? 'Presented by ' + names.join(', ') : '';
+					presenters.hidden = !names.length;
+				}
+				var link = modal.querySelector('[data-modal-link]');
+				if (link) {
+					if (event.infoUrl) {
+						link.href = event.infoUrl;
+						link.hidden = false;
+					} else {
+						link.removeAttribute('href');
+						link.hidden = true;
+					}
+				}
+				modal.classList.add('is-open');
+				modal.setAttribute('aria-hidden', 'false');
+				document.body.style.overflow = 'hidden';
+			}
+			function close() {
+				modal.classList.remove('is-open');
+				modal.setAttribute('aria-hidden', 'true');
+				document.body.style.overflow = '';
+			}
+			tabs.forEach(function(tab) {
+				tab.addEventListener('click', function() { setDay(tab.getAttribute('data-day')); });
+			});
+			root.querySelectorAll('.tn-full-schedule-event').forEach(function(button) {
+				button.addEventListener('click', function() {
+					try { open(JSON.parse(button.getAttribute('data-event') || '{}')); } catch(e) {}
+				});
+			});
+			root.querySelectorAll('[data-tn-schedule-close]').forEach(function(button) {
+				button.addEventListener('click', close);
+			});
+			document.addEventListener('keydown', function(e) {
+				if (e.key === 'Escape' && modal.classList.contains('is-open')) close();
+			});
+		});
+	})();
+	</script>
+	<?php
+	return (string) ob_get_clean();
+}
+add_shortcode( 'trivia_nationals_full_schedule', 'tn_tde_render_full_schedule_shortcode' );
 
 // ─── Front-end: Fix hash/anchor navigation ──────────────────────────────────
 // The page's inline CSS sets overflow-x:hidden on body, which makes body the
@@ -2508,7 +3019,7 @@ function trivia_desc_editor_page() {
 
   /* ── Schedule-mode field rows ── */
   .tde-fields {
-    display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.5rem;
+    display: grid; grid-template-columns: 1fr auto auto minmax(180px, 0.6fr) auto; gap: 0.5rem;
     align-items: end; margin-bottom: 0.5rem;
   }
   .tde-field label {
@@ -2526,17 +3037,30 @@ function trivia_desc_editor_page() {
   .tde-field-title { grid-column: 1 / -1; }
   .tde-field-start { width: 110px; }
   .tde-field-end   { width: 110px; }
+  .tde-field-location { min-width: 180px; }
   .tde-field-tag   { width: 150px; }
 
-  /* ── Textarea ── */
-  .tde-card textarea {
+  /* ── Rich description editor ── */
+  .tde-rich-toolbar {
+    display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 0.6rem 0 0;
+  }
+  .tde-rich-toolbar button {
+    border: 1px solid #d0d7de; border-radius: 5px; background: #fff; color: #333;
+    cursor: pointer; font-size: 0.75rem; font-weight: 800; min-width: 32px;
+    padding: 0.3rem 0.55rem;
+  }
+  .tde-rich-toolbar button:hover { background: #f0f2f5; }
+  .tde-rich-desc {
     width: 100%; border: 1px solid #d0d7de; border-radius: 6px;
     padding: 0.55rem 0.7rem; font-size: 0.83rem; line-height: 1.5;
-    resize: vertical; min-height: 75px; font-family: inherit;
+    min-height: 110px; font-family: inherit; background: #fff;
     color: #222; transition: border-color 0.2s;
   }
-  .tde-card textarea:focus {
+  .tde-rich-desc:focus {
     outline: none; border-color: #0096a0; box-shadow: 0 0 0 3px rgba(0,150,160,0.12);
+  }
+  .tde-rich-desc img {
+    display: block; max-width: 100%; height: auto; margin: 0.5rem 0; border-radius: 6px;
   }
   .tde-card .tde-info-url {
     margin-top: 0.5rem;
@@ -2636,6 +3160,7 @@ function trivia_desc_editor_page() {
   }
   .tde-presenter-photo-btn:hover { background: #f0f2f5; }
   .tde-card.changed textarea,
+  .tde-card.changed .tde-rich-desc,
   .tde-card.changed input,
   .tde-card.changed select { border-color: #e6a800; }
   .tde-char-count { font-size: 0.7rem; color: #999; text-align: right; margin-top: 0.2rem; }
@@ -2685,7 +3210,7 @@ function trivia_desc_editor_page() {
   var API        = '<?php echo esc_js( rest_url( 'wp/v2/pages/5' ) ); ?>';
   var AJAX_URL   = '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
   var _eData     = null;
-  var _orig      = {};      // key → { desc, image, imageAlt, infoUrl, presenters, title, start, end, tagLabel, tagClass }
+  var _orig      = {};      // key → { desc, image, imageAlt, infoUrl, presenters, title, start, end, location, tagLabel, tagClass }
   var _orderDirty = false;
   var _scheduleMode = <?php echo $schedule_mode === 'on' ? 'true' : 'false'; ?>;
 
@@ -2695,6 +3220,7 @@ function trivia_desc_editor_page() {
     { value: 'tag-finals',      label: 'Finals',      cls: 'tag-finals' },
     { value: 'tag-special',     label: 'Special',     cls: 'tag-special' }
   ];
+  var LOCATION_OPTIONS = <?php echo wp_json_encode( tn_tde_location_options() ); ?>;
 
   /* ── Utilities ── */
   function setStatus(msg, type) {
@@ -2711,6 +3237,57 @@ function trivia_desc_editor_page() {
     return escHtml(JSON.stringify(value || []));
   }
   function escId(s) { return s.replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function stripTags(html) {
+    var el = document.createElement('div');
+    el.innerHTML = html || '';
+    return el.textContent || '';
+  }
+  function sanitizeDescriptionHtml(html) {
+    var allowed = { A: true, STRONG: true, B: true, EM: true, I: true, U: true, BR: true, P: true, UL: true, OL: true, LI: true, IMG: true };
+    var template = document.createElement('template');
+    template.innerHTML = html || '';
+    function clean(node) {
+      Array.from(node.childNodes).forEach(function(child) {
+        if (child.nodeType === Node.TEXT_NODE) return;
+        if (child.nodeType !== Node.ELEMENT_NODE) {
+          child.remove();
+          return;
+        }
+        if (!allowed[child.tagName]) {
+          child.replaceWith(document.createTextNode(child.textContent || ''));
+          return;
+        }
+        Array.from(child.attributes).forEach(function(attr) {
+          var name = attr.name.toLowerCase();
+          if (child.tagName === 'A' && name === 'href') return;
+          if (child.tagName === 'IMG' && ['src','alt','width','height','class'].indexOf(name) !== -1) return;
+          child.removeAttribute(attr.name);
+        });
+        if (child.tagName === 'A') {
+          var href = child.getAttribute('href') || '';
+          if (!/^(https?:|mailto:|tel:|#)/i.test(href)) {
+            child.replaceWith(document.createTextNode(child.textContent || ''));
+            return;
+          }
+          child.setAttribute('target', '_blank');
+          child.setAttribute('rel', 'noopener noreferrer');
+        }
+        if (child.tagName === 'IMG') {
+          var src = child.getAttribute('src') || '';
+          if (!/^https?:/i.test(src)) {
+            child.remove();
+            return;
+          }
+        }
+        clean(child);
+      });
+    }
+    clean(template.content);
+    return template.innerHTML.trim();
+  }
+  function normalizeDescriptionHtml(html) {
+    return sanitizeDescriptionHtml(html).trim();
+  }
   function normalizePresenters(value) {
     var list = [];
     if (Array.isArray(value)) {
@@ -2736,6 +3313,10 @@ function trivia_desc_editor_page() {
   }
   function normalizeImageAlt(value) {
     return String(value || '').trim();
+  }
+  function normalizeLocation(value) {
+    value = String(value || '').trim();
+    return Object.prototype.hasOwnProperty.call(LOCATION_OPTIONS, value) ? value : '';
   }
   function getTagLabel(tagClass) {
     var opt = TAG_OPTIONS.find(function(o){ return o.value === tagClass; });
@@ -2872,12 +3453,13 @@ function trivia_desc_editor_page() {
     return out;
   }
 
-  function buildEventCard(dayId, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, isNew) {
+  function buildEventCard(dayId, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, location, isNew) {
     var sid = escId(key);
     var out = '';
-    var showScheduleFields = _scheduleMode || isNew;
+    desc = normalizeDescriptionHtml(desc);
     image = normalizeImageUrl(image);
     imageAlt = normalizeImageAlt(imageAlt);
+    location = normalizeLocation(location);
 
     out += '<div class="tde-card' + (isNew ? ' changed' : '') + '" id="card-' + sid + '" data-key="' + escHtml(key) + '" data-day="' + escHtml(dayId) + '"' + (isNew ? ' data-new="1"' : '') + '>';
 
@@ -2911,30 +3493,45 @@ function trivia_desc_editor_page() {
     out += '<input type="text" id="f-title-' + sid + '" data-key="' + escHtml(key) + '" data-field="title" value="' + escHtml(title) + '" oninput="tdeFieldChange(this)">';
     out += '</div>';
 
-    if (showScheduleFields) {
-      out += '<div class="tde-field tde-field-start">';
-      out += '<label>Start</label>';
-      out += '<input type="text" id="f-start-' + sid + '" data-key="' + escHtml(key) + '" data-field="start" value="' + escHtml(start) + '" placeholder="e.g. 9:00 AM" oninput="tdeFieldChange(this)">';
-      out += '</div>';
-
-      out += '<div class="tde-field tde-field-end">';
-      out += '<label>End</label>';
-      out += '<input type="text" id="f-end-' + sid + '" data-key="' + escHtml(key) + '" data-field="end" value="' + escHtml(end) + '" placeholder="e.g. 10:30 AM" oninput="tdeFieldChange(this)">';
-      out += '</div>';
-
-      out += '<div class="tde-field tde-field-tag">';
-      out += '<label>Category</label>';
-      out += '<select id="f-tag-' + sid + '" data-key="' + escHtml(key) + '" data-field="tag" onchange="tdeFieldChange(this)">';
-      TAG_OPTIONS.forEach(function(opt) {
-        out += '<option value="' + opt.value + '"' + (tagClass === opt.value ? ' selected' : '') + '>' + escHtml(opt.label) + '</option>';
-      });
-      out += '</select>';
-      out += '</div>';
-    }
+    out += '<div class="tde-field tde-field-start">';
+    out += '<label>Start</label>';
+    out += '<input type="text" id="f-start-' + sid + '" data-key="' + escHtml(key) + '" data-field="start" value="' + escHtml(start) + '" placeholder="e.g. 9:00 AM" oninput="tdeFieldChange(this)">';
     out += '</div>';
 
-    out += '<textarea id="ta-' + sid + '" data-key="' + escHtml(key) + '" data-field="desc" oninput="tdeFieldChange(this)" rows="3">' + escHtml(desc) + '</textarea>';
-    out += '<div class="tde-char-count" id="cc-' + sid + '">' + desc.length + ' chars</div>';
+    out += '<div class="tde-field tde-field-end">';
+    out += '<label>End</label>';
+    out += '<input type="text" id="f-end-' + sid + '" data-key="' + escHtml(key) + '" data-field="end" value="' + escHtml(end) + '" placeholder="e.g. 10:30 AM" oninput="tdeFieldChange(this)">';
+    out += '</div>';
+
+    out += '<div class="tde-field tde-field-location">';
+    out += '<label>Location</label>';
+    out += '<select id="f-location-' + sid + '" data-key="' + escHtml(key) + '" data-field="location" onchange="tdeFieldChange(this)">';
+    out += '<option value="">Location TBA</option>';
+    Object.keys(LOCATION_OPTIONS).forEach(function(value) {
+      out += '<option value="' + escHtml(value) + '"' + (location === value ? ' selected' : '') + '>' + escHtml(LOCATION_OPTIONS[value]) + '</option>';
+    });
+    out += '</select>';
+    out += '</div>';
+
+    out += '<div class="tde-field tde-field-tag">';
+    out += '<label>Category</label>';
+    out += '<select id="f-tag-' + sid + '" data-key="' + escHtml(key) + '" data-field="tag" onchange="tdeFieldChange(this)">';
+    TAG_OPTIONS.forEach(function(opt) {
+      out += '<option value="' + opt.value + '"' + (tagClass === opt.value ? ' selected' : '') + '>' + escHtml(opt.label) + '</option>';
+    });
+    out += '</select>';
+    out += '</div>';
+    out += '</div>';
+
+    out += '<div class="tde-rich-toolbar" data-key="' + escHtml(key) + '">';
+    out += '<button type="button" onclick="tdeRichCommand(this, \'bold\')" title="Bold"><strong>B</strong></button>';
+    out += '<button type="button" onclick="tdeRichCommand(this, \'italic\')" title="Italic"><em>I</em></button>';
+    out += '<button type="button" onclick="tdeRichCommand(this, \'insertUnorderedList\')" title="Bulleted list">• List</button>';
+    out += '<button type="button" onclick="tdeRichLink(this)" title="Add link">Link</button>';
+    out += '<button type="button" onclick="tdeRichImage(this)" title="Insert image">Image</button>';
+    out += '</div>';
+    out += '<div id="ta-' + sid + '" class="tde-rich-desc" data-key="' + escHtml(key) + '" data-field="desc" contenteditable="true" oninput="tdeRichChange(this)">' + desc + '</div>';
+    out += '<div class="tde-char-count" id="cc-' + sid + '">' + stripTags(desc).length + ' chars</div>';
     out += '<div class="tde-event-graphic" id="graphic-' + sid + '">';
     if (image) {
       out += '<img class="tde-event-graphic-preview" src="' + escHtml(image) + '" alt="">';
@@ -2993,10 +3590,11 @@ function trivia_desc_editor_page() {
         var presenters = normalizePresenters(item.getAttribute('data-presenters') || '');
         var start    = item.getAttribute('data-start') || '';
         var end      = item.getAttribute('data-end') || '';
+        var location = item.getAttribute('data-location') || '';
 
         var key = day.id + '|' + idx;
-        _orig[key] = { title: title, desc: desc, image: image, imageAlt: imageAlt, infoUrl: infoUrl, presenters: presenters, start: start, end: end, tagLabel: tagLabel, tagClass: tagClass };
-        out += buildEventCard(day.id, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, false);
+        _orig[key] = { title: title, desc: normalizeDescriptionHtml(desc), image: image, imageAlt: imageAlt, infoUrl: infoUrl, presenters: presenters, start: start, end: end, location: normalizeLocation(location), tagLabel: tagLabel, tagClass: tagClass };
+        out += buildEventCard(day.id, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, location, false);
       });
 
       out += '</div></div>'; // end .tde-day-items, .tde-day
@@ -3026,10 +3624,10 @@ function trivia_desc_editor_page() {
     var key = dayId + '|new|' + Date.now();
     var tagClass = 'tag-competition';
     _orig[key] = {
-      title: '', desc: '', image: '', imageAlt: '', infoUrl: '', presenters: [], start: '', end: '',
+      title: '', desc: '', image: '', imageAlt: '', infoUrl: '', presenters: [], start: '', end: '', location: '',
       tagLabel: getTagLabel(tagClass), tagClass: tagClass, isNew: true
     };
-    dayItems.insertAdjacentHTML('beforeend', buildEventCard(dayId, key, '', getTagLabel(tagClass), tagClass, '', '', '', '', [], '', '', true));
+    dayItems.insertAdjacentHTML('beforeend', buildEventCard(dayId, key, '', getTagLabel(tagClass), tagClass, '', '', '', '', [], '', '', '', true));
     var titleEl = document.getElementById('f-title-' + escId(key));
     if (titleEl) titleEl.focus();
     updateOrderButtons();
@@ -3117,6 +3715,68 @@ function trivia_desc_editor_page() {
   window.tdePresenterChange = function(el) {
     var key = el.getAttribute('data-key');
     markPresenterCardChanged(key);
+  };
+
+  window.tdeRichChange = function(el) {
+    if (!el) return;
+    var key = el.getAttribute('data-key');
+    var sid = escId(key);
+    var counter = document.getElementById('cc-' + sid);
+    if (counter) counter.textContent = stripTags(el.innerHTML).length + ' chars';
+    refreshCardChangeState(key);
+  };
+
+  function richEditorForButton(btn) {
+    var card = btn && btn.closest('.tde-card');
+    return card ? card.querySelector('.tde-rich-desc') : null;
+  }
+
+  window.tdeRichCommand = function(btn, command) {
+    var editor = richEditorForButton(btn);
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, null);
+    tdeRichChange(editor);
+  };
+
+  window.tdeRichLink = function(btn) {
+    var editor = richEditorForButton(btn);
+    if (!editor) return;
+    var url = prompt('Link URL');
+    if (!url) return;
+    editor.focus();
+    document.execCommand('createLink', false, url);
+    editor.querySelectorAll('a').forEach(function(anchor) {
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    });
+    tdeRichChange(editor);
+  };
+
+  window.tdeRichImage = function(btn) {
+    if (!window.wp || !wp.media) {
+      setStatus('Media library is not available on this screen.', 'err');
+      return;
+    }
+    var editor = richEditorForButton(btn);
+    if (!editor) return;
+    var frame = wp.media({
+      title: 'Insert description image',
+      button: { text: 'Insert image' },
+      library: { type: 'image' },
+      multiple: false
+    });
+    frame.on('select', function() {
+      var image = frame.state().get('selection').first();
+      if (!image) return;
+      var data = image.toJSON();
+      var url = data.sizes && data.sizes.large ? data.sizes.large.url : data.url;
+      if (!url) return;
+      editor.focus();
+      document.execCommand('insertHTML', false, '<img src="' + escHtml(url) + '" alt="' + escHtml(data.alt || data.title || '') + '">');
+      tdeRichChange(editor);
+    });
+    frame.open();
   };
 
   window.tdeChoosePresenterPhoto = function(btn) {
@@ -3291,11 +3951,10 @@ function trivia_desc_editor_page() {
       cur.infoUrl !== orig.infoUrl ||
       !presentersEqual(cur.presenters, orig.presenters) ||
       cur.title !== orig.title;
-    if (_scheduleMode || orig.isNew) {
-      if (cur.start !== orig.start) changed = true;
-      if (cur.end !== orig.end) changed = true;
-      if (cur.tagClass !== orig.tagClass) changed = true;
-    }
+    if (cur.start !== orig.start) changed = true;
+    if (cur.end !== orig.end) changed = true;
+    if (cur.location !== orig.location) changed = true;
+    if (cur.tagClass !== orig.tagClass) changed = true;
     if (changed) card.classList.add('changed');
     else card.classList.remove('changed');
     updateCount();
@@ -3329,11 +3988,10 @@ function trivia_desc_editor_page() {
     if (cur.infoUrl !== orig.infoUrl) changed = true;
     if (!presentersEqual(cur.presenters, orig.presenters)) changed = true;
     if (cur.title !== orig.title) changed = true;
-    if (_scheduleMode || orig.isNew) {
-      if (cur.start !== orig.start) changed = true;
-      if (cur.end !== orig.end)     changed = true;
-      if (cur.tagClass !== orig.tagClass) changed = true;
-    }
+    if (cur.start !== orig.start) changed = true;
+    if (cur.end !== orig.end) changed = true;
+    if (cur.location !== orig.location) changed = true;
+    if (cur.tagClass !== orig.tagClass) changed = true;
 
     if (changed) card.classList.add('changed');
     else card.classList.remove('changed');
@@ -3347,7 +4005,7 @@ function trivia_desc_editor_page() {
     var imageEl = document.getElementById('f-image-' + sid);
     var imageAltEl = document.getElementById('f-image-alt-' + sid);
     var infoEl = document.getElementById('f-info-' + sid);
-    vals.desc = descEl ? descEl.value : (_orig[key] ? _orig[key].desc : '');
+    vals.desc = descEl ? normalizeDescriptionHtml(descEl.innerHTML) : (_orig[key] ? _orig[key].desc : '');
     vals.image = imageEl ? normalizeImageUrl(imageEl.value) : (_orig[key] ? (_orig[key].image || '') : '');
     vals.imageAlt = imageAltEl ? normalizeImageAlt(imageAltEl.value) : (_orig[key] ? (_orig[key].imageAlt || '') : '');
     vals.infoUrl = infoEl ? infoEl.value.trim() : (_orig[key] ? (_orig[key].infoUrl || '') : '');
@@ -3355,20 +4013,15 @@ function trivia_desc_editor_page() {
     var titleEl = document.getElementById('f-title-' + sid);
     vals.title = titleEl ? titleEl.value : (_orig[key] ? _orig[key].title : '');
 
-    if (_scheduleMode || (_orig[key] && _orig[key].isNew)) {
-      var startEl = document.getElementById('f-start-' + sid);
-      var endEl   = document.getElementById('f-end-' + sid);
-      var tagEl   = document.getElementById('f-tag-' + sid);
-      vals.start    = startEl ? startEl.value : '';
-      vals.end      = endEl   ? endEl.value   : '';
-      vals.tagClass = tagEl   ? tagEl.value   : (_orig[key] ? _orig[key].tagClass : '');
-      vals.tagLabel = getTagLabel(vals.tagClass);
-    } else {
-      vals.start    = _orig[key] ? _orig[key].start    : '';
-      vals.end      = _orig[key] ? _orig[key].end      : '';
-      vals.tagClass = _orig[key] ? _orig[key].tagClass  : '';
-      vals.tagLabel = _orig[key] ? _orig[key].tagLabel  : '';
-    }
+    var startEl = document.getElementById('f-start-' + sid);
+    var endEl   = document.getElementById('f-end-' + sid);
+    var locationEl = document.getElementById('f-location-' + sid);
+    var tagEl   = document.getElementById('f-tag-' + sid);
+    vals.start    = startEl ? startEl.value : '';
+    vals.end      = endEl   ? endEl.value   : '';
+    vals.location = locationEl ? normalizeLocation(locationEl.value) : (_orig[key] ? (_orig[key].location || '') : '');
+    vals.tagClass = tagEl   ? tagEl.value   : (_orig[key] ? _orig[key].tagClass : '');
+    vals.tagLabel = getTagLabel(vals.tagClass);
     return vals;
   }
 
@@ -3473,6 +4126,12 @@ function trivia_desc_editor_page() {
           thisChanged = true;
         }
 
+        if (cur.location !== orig.location) {
+          if (cur.location) item.setAttribute('data-location', cur.location);
+          else item.removeAttribute('data-location');
+          thisChanged = true;
+        }
+
         if (cur.tagClass !== orig.tagClass) {
           item.setAttribute('data-tag-class', cur.tagClass);
           item.setAttribute('data-tag-label', cur.tagLabel);
@@ -3488,7 +4147,7 @@ function trivia_desc_editor_page() {
           changed++;
           _orig[key] = {
             title: cur.title, desc: cur.desc, image: cur.image, imageAlt: cur.imageAlt, infoUrl: cur.infoUrl, presenters: cur.presenters, start: cur.start,
-            end: cur.end, tagLabel: cur.tagLabel, tagClass: cur.tagClass
+            end: cur.end, location: cur.location, tagLabel: cur.tagLabel, tagClass: cur.tagClass
           };
         }
         itemByKey[key] = item;
@@ -3507,6 +4166,7 @@ function trivia_desc_editor_page() {
         cur.presenters = normalizePresenters(cur.presenters);
         cur.start = cur.start.trim();
         cur.end = cur.end.trim();
+        cur.location = normalizeLocation(cur.location);
 
         if (!cur.title) {
           invalidNew = true;
@@ -3526,6 +4186,7 @@ function trivia_desc_editor_page() {
         item.setAttribute('data-tag-class', cur.tagClass || 'tag-competition');
         if (cur.start) item.setAttribute('data-start', cur.start);
         if (cur.end) item.setAttribute('data-end', cur.end);
+        if (cur.location) item.setAttribute('data-location', cur.location);
 
         var nameSpan = doc.createElement('span');
         nameSpan.className = 'event-name';
