@@ -2108,15 +2108,20 @@ function tn_tde_get_home_schedule_events() {
 		if ( ! $day_id ) continue;
 		$json = html_entity_decode( $item->getAttribute( 'data-presenters' ), ENT_QUOTES, 'UTF-8' );
 		$presenters = json_decode( $json, true );
+		$sessions_json = html_entity_decode( $item->getAttribute( 'data-sessions' ), ENT_QUOTES, 'UTF-8' );
+		$sessions = tn_tde_clean_sessions( json_decode( $sessions_json, true ) );
 		$start = sanitize_text_field( $item->getAttribute( 'data-start' ) );
 		$end = sanitize_text_field( $item->getAttribute( 'data-end' ) );
 		$location = tn_tde_normalize_location( $item->getAttribute( 'data-location' ) );
-		$events[] = [
+		$base_title = sanitize_text_field( $item->getAttribute( 'data-title' ) );
+		$base_event = [
 			'day_id' => $day_id,
 			'day_label' => $days[ $day_id ]['label'],
 			'date_label' => $days[ $day_id ]['date'],
 			'date_iso' => $days[ $day_id ]['iso'],
-			'title' => sanitize_text_field( $item->getAttribute( 'data-title' ) ),
+			'title' => $base_title,
+			'base_title' => $base_title,
+			'session_label' => '',
 			'description' => tn_tde_clean_description_html( html_entity_decode( $item->getAttribute( 'data-desc' ), ENT_QUOTES, 'UTF-8' ) ),
 			'image' => esc_url_raw( $item->getAttribute( 'data-image' ) ),
 			'image_alt' => sanitize_text_field( $item->getAttribute( 'data-image-alt' ) ),
@@ -2130,6 +2135,21 @@ function tn_tde_get_home_schedule_events() {
 			'location_label' => tn_tde_location_label( $location ),
 			'presenters' => tn_tde_clean_presenters( $presenters ),
 		];
+		if ( $sessions ) {
+			foreach ( $sessions as $session ) {
+				$session_event = $base_event;
+				$session_event['session_label'] = $session['label'];
+				$session_event['title'] = $session['label'] ? $base_title . ': ' . $session['label'] : $base_title;
+				$session_event['start'] = $session['start'];
+				$session_event['end'] = $session['end'];
+				$session_event['start_minutes'] = tn_tde_parse_start_minutes( $session['start'] );
+				$session_event['location'] = $session['location'];
+				$session_event['location_label'] = tn_tde_location_label( $session['location'] );
+				$events[] = $session_event;
+			}
+		} else {
+			$events[] = $base_event;
+		}
 	}
 
 	usort( $events, function( $a, $b ) {
@@ -2160,6 +2180,23 @@ function tn_tde_clean_presenters( $presenters ) {
 			'photo' => $photo,
 		];
 	}, $presenters ) ) );
+}
+
+function tn_tde_clean_sessions( $sessions ) {
+	if ( ! is_array( $sessions ) ) return [];
+	return array_values( array_filter( array_map( function( $session ) {
+		$label = sanitize_text_field( $session['label'] ?? '' );
+		$start = sanitize_text_field( $session['start'] ?? '' );
+		$end = sanitize_text_field( $session['end'] ?? '' );
+		$location = tn_tde_normalize_location( $session['location'] ?? '' );
+		if ( $label === '' && $start === '' && $end === '' && $location === '' ) return null;
+		return [
+			'label' => $label,
+			'start' => $start,
+			'end' => $end,
+			'location' => $location,
+		];
+	}, $sessions ) ) );
 }
 
 function tn_tde_day_label_from_item( $item ) {
@@ -3454,6 +3491,44 @@ function trivia_desc_editor_page() {
   .tde-presenter-row textarea {
     min-height: 58px;
   }
+  .tde-sessions {
+    margin-top: 0.65rem; border: 1px solid #d8dee4; border-radius: 6px;
+    background: #f6f8fa; padding: 0.7rem;
+  }
+  .tde-sessions-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    margin-bottom: 0.55rem;
+  }
+  .tde-sessions-title {
+    font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #555;
+  }
+  .tde-session-add,
+  .tde-session-remove {
+    border: 1px solid #d0d7de; border-radius: 5px; background: #fff; color: #333;
+    cursor: pointer; font-size: 0.7rem; font-weight: 700; padding: 0.25rem 0.55rem;
+  }
+  .tde-session-add:hover,
+  .tde-session-remove:hover { background: #f0f2f5; }
+  .tde-session-row {
+    display: grid; grid-template-columns: minmax(180px, 1.4fr) 110px 110px minmax(180px, 1fr) auto;
+    gap: 0.5rem; align-items: end; padding: 0.55rem 0; border-top: 1px solid #e1e4e8;
+  }
+  .tde-session-row:first-of-type { border-top: none; padding-top: 0; }
+  .tde-session-row label {
+    display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #888; margin-bottom: 0.15rem;
+  }
+  .tde-session-row input,
+  .tde-session-row select {
+    width: 100%; border: 1px solid #d0d7de; border-radius: 5px;
+    padding: 0.42rem 0.55rem; font-size: 0.82rem; font-family: inherit;
+    color: #222; transition: border-color 0.2s; background: #fff;
+  }
+  .tde-session-row input:focus,
+  .tde-session-row select:focus {
+    outline: none; border-color: #0096a0; box-shadow: 0 0 0 3px rgba(0,150,160,0.12);
+  }
   .tde-presenter-photo-field {
     display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center;
   }
@@ -3521,7 +3596,7 @@ function trivia_desc_editor_page() {
   var API        = '<?php echo esc_js( rest_url( 'wp/v2/pages/5' ) ); ?>';
   var AJAX_URL   = '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
   var _eData     = null;
-  var _orig      = {};      // key → { desc, image, imageAlt, infoUrl, presenters, title, start, end, location, tagLabel, tagClass }
+  var _orig      = {};      // key → { desc, image, imageAlt, infoUrl, presenters, sessions, title, start, end, location, tagLabel, tagClass }
   var _orderDirty = false;
   var _scheduleMode = <?php echo $schedule_mode === 'on' ? 'true' : 'false'; ?>;
 
@@ -3618,6 +3693,27 @@ function trivia_desc_editor_page() {
   }
   function presentersEqual(a, b) {
     return JSON.stringify(normalizePresenters(a)) === JSON.stringify(normalizePresenters(b));
+  }
+  function normalizeSessions(value) {
+    var list = [];
+    if (Array.isArray(value)) {
+      list = value;
+    } else if (typeof value === 'string' && value.trim()) {
+      try { list = JSON.parse(value); } catch(e) { list = []; }
+    }
+    return list.map(function(session) {
+      return {
+        label: String((session && session.label) || '').trim(),
+        start: String((session && session.start) || '').trim(),
+        end: String((session && session.end) || '').trim(),
+        location: normalizeLocation((session && session.location) || '')
+      };
+    }).filter(function(session) {
+      return session.label || session.start || session.end || session.location;
+    });
+  }
+  function sessionsEqual(a, b) {
+    return JSON.stringify(normalizeSessions(a)) === JSON.stringify(normalizeSessions(b));
   }
   function normalizeImageUrl(value) {
     return String(value || '').trim();
@@ -3764,7 +3860,56 @@ function trivia_desc_editor_page() {
     return out;
   }
 
-  function buildEventCard(dayId, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, location, isNew) {
+  function buildSessionRow(key, idx, session) {
+    var sid = escId(key);
+    session = session || { label: '', start: '', end: '', location: '' };
+    session.location = normalizeLocation(session.location);
+    var baseId = 'session-' + sid + '-' + idx;
+    var out = '';
+    out += '<div class="tde-session-row" data-session-index="' + idx + '">';
+    out += '<div>';
+    out += '<label for="' + baseId + '-label">Session</label>';
+    out += '<input type="text" id="' + baseId + '-label" data-key="' + escHtml(key) + '" data-session-field="label" value="' + escHtml(session.label || '') + '" placeholder="Prelim Flight A" oninput="tdeSessionChange(this)">';
+    out += '</div>';
+    out += '<div>';
+    out += '<label for="' + baseId + '-start">Start</label>';
+    out += '<input type="text" id="' + baseId + '-start" data-key="' + escHtml(key) + '" data-session-field="start" value="' + escHtml(session.start || '') + '" placeholder="9:00 AM" oninput="tdeSessionChange(this)">';
+    out += '</div>';
+    out += '<div>';
+    out += '<label for="' + baseId + '-end">End</label>';
+    out += '<input type="text" id="' + baseId + '-end" data-key="' + escHtml(key) + '" data-session-field="end" value="' + escHtml(session.end || '') + '" placeholder="10:30 AM" oninput="tdeSessionChange(this)">';
+    out += '</div>';
+    out += '<div>';
+    out += '<label for="' + baseId + '-location">Location</label>';
+    out += '<select id="' + baseId + '-location" data-key="' + escHtml(key) + '" data-session-field="location" onchange="tdeSessionChange(this)">';
+    out += '<option value="">Location TBA</option>';
+    Object.keys(LOCATION_OPTIONS).forEach(function(value) {
+      out += '<option value="' + escHtml(value) + '"' + (session.location === value ? ' selected' : '') + '>' + escHtml(LOCATION_OPTIONS[value]) + '</option>';
+    });
+    out += '</select>';
+    out += '</div>';
+    out += '<button type="button" class="tde-session-remove" onclick="tdeRemoveSession(this)">Remove</button>';
+    out += '</div>';
+    return out;
+  }
+
+  function buildSessionsEditor(key, sessions) {
+    var sid = escId(key);
+    sessions = normalizeSessions(sessions);
+    var out = '';
+    out += '<div class="tde-sessions" id="sessions-' + sid + '" data-key="' + escHtml(key) + '">';
+    out += '<div class="tde-sessions-head">';
+    out += '<span class="tde-sessions-title">Sessions</span>';
+    out += '<button type="button" class="tde-session-add" data-key="' + escHtml(key) + '" onclick="tdeAddSessionFromButton(this)">+ Add Session</button>';
+    out += '</div>';
+    out += '<div class="tde-session-list">';
+    sessions.forEach(function(session, idx) { out += buildSessionRow(key, idx, session); });
+    out += '</div>';
+    out += '</div>';
+    return out;
+  }
+
+  function buildEventCard(dayId, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, sessions, start, end, location, isNew) {
     var sid = escId(key);
     var out = '';
     desc = normalizeDescriptionHtml(desc);
@@ -3866,6 +4011,7 @@ function trivia_desc_editor_page() {
     out += '<label for="f-info-' + sid + '">More Info URL</label>';
     out += '<input type="text" id="f-info-' + sid + '" data-key="' + escHtml(key) + '" data-field="infoUrl" value="' + escHtml(infoUrl || '') + '" placeholder="https://trivianationals.org/event-page/ or /event-page/" oninput="tdeFieldChange(this)">';
     out += '</div>';
+    out += buildSessionsEditor(key, sessions);
     out += buildPresentersEditor(key, presenters);
     out += '</div>';
 
@@ -3899,13 +4045,14 @@ function trivia_desc_editor_page() {
         var imageAlt = item.getAttribute('data-image-alt') || '';
         var infoUrl  = item.getAttribute('data-info-url') || '';
         var presenters = normalizePresenters(item.getAttribute('data-presenters') || '');
+        var sessions = normalizeSessions(item.getAttribute('data-sessions') || '');
         var start    = item.getAttribute('data-start') || '';
         var end      = item.getAttribute('data-end') || '';
         var location = item.getAttribute('data-location') || '';
 
         var key = day.id + '|' + idx;
-        _orig[key] = { title: title, desc: normalizeDescriptionHtml(desc), image: image, imageAlt: imageAlt, infoUrl: infoUrl, presenters: presenters, start: start, end: end, location: normalizeLocation(location), tagLabel: tagLabel, tagClass: tagClass };
-        out += buildEventCard(day.id, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, start, end, location, false);
+        _orig[key] = { title: title, desc: normalizeDescriptionHtml(desc), image: image, imageAlt: imageAlt, infoUrl: infoUrl, presenters: presenters, sessions: sessions, start: start, end: end, location: normalizeLocation(location), tagLabel: tagLabel, tagClass: tagClass };
+        out += buildEventCard(day.id, key, title, tagLabel, tagClass, desc, image, imageAlt, infoUrl, presenters, sessions, start, end, location, false);
       });
 
       out += '</div></div>'; // end .tde-day-items, .tde-day
@@ -3935,10 +4082,10 @@ function trivia_desc_editor_page() {
     var key = dayId + '|new|' + Date.now();
     var tagClass = 'tag-competition';
     _orig[key] = {
-      title: '', desc: '', image: '', imageAlt: '', infoUrl: '', presenters: [], start: '', end: '', location: '',
+      title: '', desc: '', image: '', imageAlt: '', infoUrl: '', presenters: [], sessions: [], start: '', end: '', location: '',
       tagLabel: getTagLabel(tagClass), tagClass: tagClass, isNew: true
     };
-    dayItems.insertAdjacentHTML('beforeend', buildEventCard(dayId, key, '', getTagLabel(tagClass), tagClass, '', '', '', '', [], '', '', '', true));
+    dayItems.insertAdjacentHTML('beforeend', buildEventCard(dayId, key, '', getTagLabel(tagClass), tagClass, '', '', '', '', [], [], '', '', '', true));
     var titleEl = document.getElementById('f-title-' + escId(key));
     if (titleEl) titleEl.focus();
     updateOrderButtons();
@@ -4026,6 +4173,37 @@ function trivia_desc_editor_page() {
   window.tdePresenterChange = function(el) {
     var key = el.getAttribute('data-key');
     markPresenterCardChanged(key);
+  };
+
+  window.tdeAddSessionFromButton = function(btn) {
+    if (!btn) return;
+    tdeAddSession(btn.getAttribute('data-key'));
+  };
+
+  window.tdeAddSession = function(key) {
+    var wrap = document.getElementById('sessions-' + escId(key));
+    if (!wrap) return;
+    var list = wrap.querySelector('.tde-session-list');
+    if (!list) return;
+    var idx = list.querySelectorAll('.tde-session-row').length;
+    list.insertAdjacentHTML('beforeend', buildSessionRow(key, idx, { label: '', start: '', end: '', location: '' }));
+    var firstInput = list.querySelector('.tde-session-row:last-child input');
+    if (firstInput) firstInput.focus();
+    markSessionCardChanged(key);
+  };
+
+  window.tdeRemoveSession = function(btn) {
+    var row = btn && btn.closest('.tde-session-row');
+    var wrap = btn && btn.closest('.tde-sessions');
+    if (!row || !wrap) return;
+    var key = wrap.getAttribute('data-key');
+    row.remove();
+    markSessionCardChanged(key);
+  };
+
+  window.tdeSessionChange = function(el) {
+    var key = el.getAttribute('data-key');
+    markSessionCardChanged(key);
   };
 
   window.tdeRichChange = function(el) {
@@ -4241,6 +4419,27 @@ function trivia_desc_editor_page() {
     }));
   }
 
+  function getCurrentSessions(key) {
+    var wrap = document.getElementById('sessions-' + escId(key));
+    if (!wrap) return [];
+    return normalizeSessions(Array.from(wrap.querySelectorAll('.tde-session-row')).map(function(row) {
+      var labelEl = row.querySelector('[data-session-field="label"]');
+      var startEl = row.querySelector('[data-session-field="start"]');
+      var endEl = row.querySelector('[data-session-field="end"]');
+      var locationEl = row.querySelector('[data-session-field="location"]');
+      return {
+        label: labelEl ? labelEl.value : '',
+        start: startEl ? startEl.value : '',
+        end: endEl ? endEl.value : '',
+        location: locationEl ? locationEl.value : ''
+      };
+    }));
+  }
+
+  function markSessionCardChanged(key) {
+    refreshCardChangeState(key);
+  }
+
   function markPresenterCardChanged(key) {
     refreshCardChangeState(key);
   }
@@ -4261,6 +4460,7 @@ function trivia_desc_editor_page() {
       cur.imageAlt !== orig.imageAlt ||
       cur.infoUrl !== orig.infoUrl ||
       !presentersEqual(cur.presenters, orig.presenters) ||
+      !sessionsEqual(cur.sessions, orig.sessions) ||
       cur.title !== orig.title;
     if (cur.start !== orig.start) changed = true;
     if (cur.end !== orig.end) changed = true;
@@ -4298,6 +4498,7 @@ function trivia_desc_editor_page() {
     if (cur.imageAlt !== orig.imageAlt) changed = true;
     if (cur.infoUrl !== orig.infoUrl) changed = true;
     if (!presentersEqual(cur.presenters, orig.presenters)) changed = true;
+    if (!sessionsEqual(cur.sessions, orig.sessions)) changed = true;
     if (cur.title !== orig.title) changed = true;
     if (cur.start !== orig.start) changed = true;
     if (cur.end !== orig.end) changed = true;
@@ -4321,6 +4522,7 @@ function trivia_desc_editor_page() {
     vals.imageAlt = imageAltEl ? normalizeImageAlt(imageAltEl.value) : (_orig[key] ? (_orig[key].imageAlt || '') : '');
     vals.infoUrl = infoEl ? infoEl.value.trim() : (_orig[key] ? (_orig[key].infoUrl || '') : '');
     vals.presenters = getCurrentPresenters(key);
+    vals.sessions = getCurrentSessions(key);
     var titleEl = document.getElementById('f-title-' + sid);
     vals.title = titleEl ? titleEl.value : (_orig[key] ? _orig[key].title : '');
 
@@ -4419,6 +4621,12 @@ function trivia_desc_editor_page() {
           thisChanged = true;
         }
 
+        if (!sessionsEqual(cur.sessions, orig.sessions)) {
+          if (cur.sessions.length) item.setAttribute('data-sessions', JSON.stringify(cur.sessions));
+          else item.removeAttribute('data-sessions');
+          thisChanged = true;
+        }
+
         if (cur.title !== orig.title) {
           item.setAttribute('data-title', cur.title);
           var nameSpan = item.querySelector('.event-name');
@@ -4457,7 +4665,7 @@ function trivia_desc_editor_page() {
         if (thisChanged) {
           changed++;
           _orig[key] = {
-            title: cur.title, desc: cur.desc, image: cur.image, imageAlt: cur.imageAlt, infoUrl: cur.infoUrl, presenters: cur.presenters, start: cur.start,
+            title: cur.title, desc: cur.desc, image: cur.image, imageAlt: cur.imageAlt, infoUrl: cur.infoUrl, presenters: cur.presenters, sessions: cur.sessions, start: cur.start,
             end: cur.end, location: cur.location, tagLabel: cur.tagLabel, tagClass: cur.tagClass
           };
         }
@@ -4475,6 +4683,7 @@ function trivia_desc_editor_page() {
         cur.imageAlt = normalizeImageAlt(cur.imageAlt);
         cur.infoUrl = cur.infoUrl.trim();
         cur.presenters = normalizePresenters(cur.presenters);
+        cur.sessions = normalizeSessions(cur.sessions);
         cur.start = cur.start.trim();
         cur.end = cur.end.trim();
         cur.location = normalizeLocation(cur.location);
@@ -4493,6 +4702,7 @@ function trivia_desc_editor_page() {
         if (cur.imageAlt) item.setAttribute('data-image-alt', cur.imageAlt);
         if (cur.infoUrl) item.setAttribute('data-info-url', cur.infoUrl);
         if (cur.presenters.length) item.setAttribute('data-presenters', JSON.stringify(cur.presenters));
+        if (cur.sessions.length) item.setAttribute('data-sessions', JSON.stringify(cur.sessions));
         item.setAttribute('data-tag-label', cur.tagLabel || 'Competition');
         item.setAttribute('data-tag-class', cur.tagClass || 'tag-competition');
         if (cur.start) item.setAttribute('data-start', cur.start);
