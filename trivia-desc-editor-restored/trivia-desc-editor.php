@@ -2355,7 +2355,10 @@ function tn_tde_render_full_schedule_shortcode() {
 			continue;
 		}
 		$end_minutes = tn_tde_parse_start_minutes( $event['end'] ?? '' );
-		if ( $end_minutes === null || $end_minutes <= $event['start_minutes'] ) {
+		if ( $end_minutes !== null && $end_minutes <= $event['start_minutes'] ) {
+			$end_minutes += 24 * 60;
+		}
+		if ( $end_minutes === null ) {
 			$end_minutes = $event['start_minutes'] + 60;
 		}
 		$event['end_minutes'] = $end_minutes;
@@ -2556,7 +2559,7 @@ function tn_tde_render_full_schedule_shortcode() {
 		display: flex;
 		gap: 1rem;
 		justify-content: space-between;
-		margin-bottom: clamp(2rem, 4vw, 4rem);
+		margin-bottom: clamp(1.4rem, 3vw, 2.6rem);
 	}
 	.tn-full-schedule-brand {
 		color: var(--tn-grid-text);
@@ -2587,9 +2590,9 @@ function tn_tde_render_full_schedule_shortcode() {
 	.tn-full-schedule-head {
 		display: grid;
 		gap: 1rem;
-		margin-bottom: clamp(2rem, 5vw, 4.5rem);
-		min-height: clamp(260px, 38vw, 520px);
-		place-content: center start;
+		margin-bottom: clamp(0.6rem, 1.6vw, 1.2rem);
+		padding: clamp(1.4rem, 3.5vw, 3rem) 0 clamp(0.35rem, 1vw, 0.8rem);
+		place-content: start;
 		position: relative;
 	}
 	.tn-full-schedule-head::before {
@@ -2618,11 +2621,11 @@ function tn_tde_render_full_schedule_shortcode() {
 		margin: 0;
 		color: var(--tn-grid-text);
 		font-family: Outfit, Inter, sans-serif;
-		font-size: clamp(4rem, 12vw, 11rem);
+		font-size: clamp(3.2rem, 7vw, 6.4rem);
 		font-weight: 900;
 		letter-spacing: 0;
-		line-height: 0.78;
-		max-width: 9ch;
+		line-height: 0.9;
+		max-width: none;
 		text-transform: uppercase;
 	}
 	.tn-full-schedule-intro {
@@ -2649,7 +2652,7 @@ function tn_tde_render_full_schedule_shortcode() {
 		background: linear-gradient(135deg, rgba(0,230,255,0.18), rgba(255,62,165,0.13));
 		box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
 	}
-	.tn-full-schedule-day { display: none; }
+	.tn-full-schedule-day { display: none; padding: 0 !important; }
 	.tn-full-schedule-day.is-active { display: block; }
 	.tn-full-schedule-timeline-wrap {
 		overflow: visible;
@@ -2850,12 +2853,10 @@ function tn_tde_render_full_schedule_shortcode() {
 		.tn-full-schedule-nav nav {
 			justify-content: flex-start;
 		}
-		.tn-full-schedule-head {
-			min-height: clamp(230px, 72vw, 360px);
-		}
+		.tn-full-schedule-head { padding-top: 1.25rem; }
 		.tn-full-schedule-head h2 {
-			font-size: clamp(3rem, 14vw, 4.05rem);
-			max-width: 100%;
+			font-size: clamp(2.65rem, 12.5vw, 3.6rem);
+			max-width: 8.5ch;
 		}
 		.tn-full-schedule-tabs { display: grid; grid-template-columns: 1fr; }
 		.tn-full-schedule-tab { width: 100%; }
