@@ -2367,8 +2367,19 @@ function tn_tde_render_full_schedule_shortcode() {
 	ob_start();
 	?>
 	<div class="tn-full-schedule" data-tn-full-schedule>
+		<div class="tn-full-schedule-nav">
+			<a class="tn-full-schedule-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>">Trivia Nationals 2026</a>
+			<nav aria-label="Schedule page navigation">
+				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">Home</a>
+				<a href="<?php echo esc_url( home_url( '/#schedule' ) ); ?>">Schedule</a>
+				<a href="<?php echo esc_url( home_url( '/#venue' ) ); ?>">Venue</a>
+				<a href="<?php echo esc_url( home_url( '/#tickets' ) ); ?>">Tickets</a>
+			</nav>
+		</div>
 		<div class="tn-full-schedule-head">
-			<h2>Trivia Nationals Schedule</h2>
+			<p class="tn-full-schedule-kicker">August 7 - 9, 2026 / Las Vegas</p>
+			<h2>Full Schedule</h2>
+			<p class="tn-full-schedule-intro">Explore each day by time and location. Select any event for details, presenters, images, and links.</p>
 			<div class="tn-full-schedule-tabs" role="tablist" aria-label="Schedule days">
 				<?php $tab_index = 0; foreach ( $days as $day_id => $day ) : ?>
 					<button type="button" class="tn-full-schedule-tab<?php echo $tab_index === 0 ? ' is-active' : ''; ?>" data-day="<?php echo esc_attr( $day_id ); ?>" role="tab" aria-selected="<?php echo $tab_index === 0 ? 'true' : 'false'; ?>">
@@ -2489,6 +2500,26 @@ function tn_tde_render_full_schedule_shortcode() {
 		</div>
 	</div>
 	<style>
+	body.page-id-18797,
+	body.page-id-18797 #page {
+		overflow-x: hidden;
+	}
+	body.page-id-18797 #navbar,
+	body.page-id-18797 .inner-main-title,
+	body.page-id-18797 .entry-header {
+		display: none;
+	}
+	body.page-id-18797 .site-content,
+	body.page-id-18797 .site-main,
+	body.page-id-18797 .entry-content {
+		margin: 0;
+		max-width: none;
+		padding: 0;
+		width: 100%;
+	}
+	body.page-id-18797 .entry-content > p:empty {
+		display: none;
+	}
 	.tn-full-schedule {
 		--tn-grid-bg: #0a0a14;
 		--tn-grid-panel: rgba(18,20,34,0.82);
@@ -2501,34 +2532,114 @@ function tn_tde_render_full_schedule_shortcode() {
 		--tn-grid-gold: #ffd166;
 		color: var(--tn-grid-text);
 		background:
-			linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)),
+			radial-gradient(circle at 18% 7%, rgba(0,230,255,0.18), transparent 24rem),
+			radial-gradient(circle at 82% 0%, rgba(255,62,165,0.16), transparent 25rem),
+			linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0)),
 			var(--tn-grid-bg);
-		border-radius: 8px;
-		box-shadow: 0 24px 70px rgba(0,0,0,0.32);
+		border-radius: 0;
+		box-shadow: none;
 		font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-		margin-inline: auto;
-		max-width: 1320px;
-		padding: clamp(1rem, 3vw, 2rem);
+		margin-left: calc(50% - 50vw);
+		margin-right: calc(50% - 50vw);
+		max-width: none;
+		min-height: 100vh;
+		padding: clamp(2.5rem, 7vw, 6rem) clamp(1rem, 4vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+		width: 100vw;
 	}
-	.tn-full-schedule-head { display: grid; gap: 1rem; margin-bottom: 1.15rem; }
+	.tn-full-schedule > * {
+		margin-left: auto;
+		margin-right: auto;
+		max-width: 1320px;
+	}
+	.tn-full-schedule-nav {
+		align-items: center;
+		display: flex;
+		gap: 1rem;
+		justify-content: space-between;
+		margin-bottom: clamp(2rem, 4vw, 4rem);
+	}
+	.tn-full-schedule-brand {
+		color: var(--tn-grid-text);
+		font-family: Outfit, Inter, sans-serif;
+		font-size: clamp(1rem, 1.5vw, 1.35rem);
+		font-weight: 900;
+		line-height: 1;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-nav nav {
+		align-items: center;
+		display: flex;
+		flex-wrap: wrap;
+		gap: clamp(0.75rem, 2vw, 1.5rem);
+		justify-content: flex-end;
+	}
+	.tn-full-schedule-nav nav a {
+		color: var(--tn-grid-muted);
+		font-size: 0.84rem;
+		font-weight: 800;
+		text-decoration: none;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-nav nav a:hover {
+		color: var(--tn-grid-cyan);
+	}
+	.tn-full-schedule-head {
+		display: grid;
+		gap: 1rem;
+		margin-bottom: clamp(2rem, 5vw, 4.5rem);
+		min-height: clamp(260px, 38vw, 520px);
+		place-content: center start;
+		position: relative;
+	}
+	.tn-full-schedule-head::before {
+		background: linear-gradient(90deg, rgba(0,230,255,0.28), rgba(255,62,165,0.18), transparent);
+		bottom: 10%;
+		content: "";
+		height: 2px;
+		left: 0;
+		position: absolute;
+		width: min(760px, 70vw);
+		z-index: 0;
+	}
+	.tn-full-schedule-head > * {
+		position: relative;
+		z-index: 1;
+	}
+	.tn-full-schedule-kicker {
+		color: var(--tn-grid-cyan);
+		font-size: clamp(0.8rem, 1.2vw, 1rem);
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		margin: 0;
+		text-transform: uppercase;
+	}
 	.tn-full-schedule-head h2 {
 		margin: 0;
 		color: var(--tn-grid-text);
 		font-family: Outfit, Inter, sans-serif;
-		font-size: clamp(2rem, 4.6vw, 4.4rem);
+		font-size: clamp(4rem, 12vw, 11rem);
 		font-weight: 900;
 		letter-spacing: 0;
-		line-height: 0.95;
+		line-height: 0.78;
+		max-width: 9ch;
 		text-transform: uppercase;
 	}
-	.tn-full-schedule-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+	.tn-full-schedule-intro {
+		color: var(--tn-grid-muted);
+		font-size: clamp(1rem, 1.6vw, 1.3rem);
+		line-height: 1.45;
+		margin: 0;
+		max-width: 42rem;
+	}
+	.tn-full-schedule-tabs { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.4rem; }
 	.tn-full-schedule-tab {
 		border: 1px solid var(--tn-grid-line);
 		border-radius: 8px;
-		background: rgba(255,255,255,0.045);
+		background: rgba(255,255,255,0.055);
 		color: var(--tn-grid-text);
 		cursor: pointer;
-		padding: 0.75rem 1rem;
+		padding: 0.85rem 1rem;
 		text-align: left;
 	}
 	.tn-full-schedule-tab span { display: block; font-weight: 900; text-transform: uppercase; }
@@ -2732,6 +2843,20 @@ function tn_tde_render_full_schedule_shortcode() {
 	}
 	@media (max-width: 820px) {
 		.tn-full-schedule { box-shadow: none; }
+		.tn-full-schedule-nav {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.tn-full-schedule-nav nav {
+			justify-content: flex-start;
+		}
+		.tn-full-schedule-head {
+			min-height: clamp(230px, 72vw, 360px);
+		}
+		.tn-full-schedule-head h2 {
+			font-size: clamp(3rem, 14vw, 4.05rem);
+			max-width: 100%;
+		}
 		.tn-full-schedule-tabs { display: grid; grid-template-columns: 1fr; }
 		.tn-full-schedule-tab { width: 100%; }
 		.tn-full-schedule-locations,
