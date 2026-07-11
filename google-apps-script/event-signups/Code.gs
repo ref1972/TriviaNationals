@@ -59,6 +59,22 @@ function doPost(e) {
       return jsonResponse(lookupSignupSummary(String(payload.email)));
     }
 
+    if (payload.action === 'send_email') {
+      const to = normalizeEmail(payload.to);
+      if (!to || !/@/.test(to) || !payload.subject) {
+        return jsonResponse({ ok: false, error: 'Missing to/subject' });
+      }
+      const htmlBody = String(payload.html_body || '');
+      const plainBody = String(payload.plain_body || '') || htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      GmailApp.sendEmail(to, String(payload.subject), plainBody, {
+        htmlBody: htmlBody,
+        from: SUMMARY_FROM_EMAIL,
+        replyTo: SUMMARY_FROM_EMAIL,
+        name: SUMMARY_FROM_NAME,
+      });
+      return jsonResponse({ ok: true, action: 'sent', to: to });
+    }
+
     if (payload.action === 'event_signup_delete') {
       if (!payload.signup || !payload.signup.signup_id) {
         return jsonResponse({ ok: false, error: 'Invalid payload' });

@@ -4115,13 +4115,44 @@ function tn_tde_handle_bulk_event_signup() {
 	exit;
 }
 
+function tn_tde_send_email_via_apps_script( $to, $subject, $html ) {
+	$endpoint = trim( (string) get_option( 'tn_tde_signup_sheets_endpoint' ) );
+	$secret = trim( (string) get_option( 'tn_tde_signup_sheets_secret' ) );
+	if ( ! $endpoint || ! $secret ) return false;
+	$response = wp_remote_post( $endpoint, [
+		'timeout' => 15,
+		'redirection' => 0,
+		'headers' => [ 'Content-Type' => 'application/json; charset=utf-8' ],
+		'body' => wp_json_encode( [ 'secret' => $secret, 'action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html ] ),
+	] );
+	if ( is_wp_error( $response ) ) return false;
+	$code = wp_remote_retrieve_response_code( $response );
+	if ( $code >= 300 && $code < 400 && wp_remote_retrieve_header( $response, 'location' ) ) {
+		$response = wp_remote_get( wp_remote_retrieve_header( $response, 'location' ), [ 'timeout' => 15, 'redirection' => 5 ] );
+		$code = is_wp_error( $response ) ? 500 : wp_remote_retrieve_response_code( $response );
+	}
+	$body = is_wp_error( $response ) ? '' : wp_remote_retrieve_body( $response );
+	$result = json_decode( $body, true );
+	return $code >= 200 && $code < 300 && is_array( $result ) && ! empty( $result['ok'] );
+}
+
+// Host PHP mail() delivery is unreliable (HostGator drops it); prefer the Apps Script Gmail relay.
+function tn_tde_send_signup_email( $to, $subject, $html ) {
+	if ( tn_tde_send_email_via_apps_script( $to, $subject, $html ) ) return true;
+	return wp_mail( $to, $subject, $html, [
+		'From: Trivia Nationals <info@trivianationals.org>',
+		'Reply-To: Trivia Nationals <info@trivianationals.org>',
+		'Content-Type: text/html; charset=UTF-8',
+	] );
+}
+
 function tn_tde_handle_email_signup_summary() {
 	$redirect = isset( $_POST['tn_signup_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['tn_signup_redirect'] ) ) : home_url( '/event-signups/' );
 	if ( ! isset( $_POST['tn_tde_email_signup_summary_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tn_tde_email_signup_summary_nonce'] ) ), 'tn_tde_email_signup_summary' ) ) {
 		wp_safe_redirect( add_query_arg( 'tn_lookup', 'invalid', $redirect ) );
 		exit;
 	}
-	$honeypot = $_POST['tn_signup_lookup_company'] ?? '';
+	$honeypot = $_POST['tn_signup_lookup_check'] ?? $_POST['tn_signup_lookup_company'] ?? '';
 	if ( trim( (string) wp_unslash( $honeypot ) ) !== '' ) {
 		wp_safe_redirect( add_query_arg( 'tn_lookup', 'sent', $redirect ) );
 		exit;
@@ -4132,15 +4163,10 @@ function tn_tde_handle_email_signup_summary() {
 		exit;
 	}
 	$manage_token = tn_tde_issue_manage_signups_token( $email );
-	$sent = wp_mail(
+	$sent = tn_tde_send_signup_email(
 		$email,
 		'Your Trivia Nationals 2026 event signups',
-		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ), $manage_token ? tn_tde_manage_signups_url( $manage_token ) : '' ),
-		[
-			'From: Trivia Nationals <info@trivianationals.org>',
-			'Reply-To: Trivia Nationals <info@trivianationals.org>',
-			'Content-Type: text/html; charset=UTF-8',
-		]
+		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ), $manage_token ? tn_tde_manage_signups_url( $manage_token ) : '' )
 	);
 	$status = $sent ? 'sent' : 'error';
 	wp_safe_redirect( add_query_arg( 'tn_lookup', $status, $redirect ) );
@@ -4684,7 +4710,7 @@ function tn_tde_render_manage_signups_page() {
 						</p>
 						<p class="tn-signup-trap" aria-hidden="true">
 							<label for="tn_manage_lookup_company">Leave this field blank</label>
-							<input type="text" id="tn_manage_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
+							<input type="text" id="tn_manage_lookup_company" name="tn_signup_lookup_check" tabindex="-1" autocomplete="new-password">
 						</p>
 						<button type="submit" data-tn-saving-label="Sending...">Email Me a Link</button>
 					</form>
@@ -4792,16 +4818,7 @@ function tn_tde_send_manage_confirmation_email( $email, $subject, $intro, $signu
 	$html .= '<p><a href="' . esc_url( tn_tde_manage_signups_url( $token ) ) . '">Manage your signups</a> (link works for 72 hours from when it was first emailed).</p>';
 	$html .= '<p style="color:#666;font-size:13px;">If you did not make this change, please contact info@trivianationals.org.</p>';
 	$html .= '</div>';
-	wp_mail(
-		$email,
-		$subject,
-		$html,
-		[
-			'From: Trivia Nationals <info@trivianationals.org>',
-			'Reply-To: Trivia Nationals <info@trivianationals.org>',
-			'Content-Type: text/html; charset=UTF-8',
-		]
-	);
+	tn_tde_send_signup_email( $email, $subject, $html );
 }
 
 add_action( 'admin_post_tn_tde_manage_signup_update', 'tn_tde_handle_manage_signup_update' );
@@ -5290,7 +5307,7 @@ function tn_tde_render_signup_page() {
 					</p>
 					<p class="tn-signup-trap" aria-hidden="true">
 						<label for="tn_signup_lookup_company">Leave this field blank</label>
-						<input type="text" id="tn_signup_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
+						<input type="text" id="tn_signup_lookup_company" name="tn_signup_lookup_check" tabindex="-1" autocomplete="new-password">
 					</p>
 					<button type="submit" class="tn-signup-submit" data-tn-saving-label="Sending...">Email My Signups</button>
 				</form>
