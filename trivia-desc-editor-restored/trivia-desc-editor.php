@@ -3349,7 +3349,13 @@ function tn_tde_render_event_signup_form( $event ) {
 			<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
 		</div>
 		<?php if ( $status === 'success' ) : ?>
-			<p class="tn-dynamic-event-signup-message is-success">Thanks! Your signup was received.</p>
+			<div class="tn-signup-success-banner" role="status">
+				<span class="tn-signup-success-check" aria-hidden="true"></span>
+				<div>
+					<strong>You&#8217;re signed up!</strong>
+					<p>Your signup was received. You can check or change your signups anytime from the <a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Event Signups page</a>.</p>
+				</div>
+			</div>
 		<?php elseif ( in_array( $status, [ 'invalid', 'closed', 'missing', 'spam', 'error' ], true ) ) : ?>
 			<p class="tn-dynamic-event-signup-message is-error">Sorry, that signup could not be saved. Please check the required fields and try again.</p>
 		<?php endif; ?>
@@ -3402,13 +3408,129 @@ function tn_tde_render_event_signup_form( $event ) {
 				<input type="text" id="tn_signup_referrer_check" name="tn_signup_referrer_check" tabindex="-1" autocomplete="new-password">
 			</p>
 			<p class="is-full">
-				<button type="submit">Submit Signup</button>
+				<button type="submit" data-tn-saving-label="Submitting...">Submit Signup</button>
 			</p>
 		</form>
 	</section>
 	<?php
 	return (string) ob_get_clean();
 }
+
+add_action( 'wp_footer', function() {
+	if ( is_admin() ) return;
+	?>
+	<style>
+	.tn-signup-success-banner {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin: 0 0 1.2rem;
+		padding: 1.1rem 1.25rem;
+		border: 1px solid rgba(53,230,159,0.55);
+		border-radius: 12px;
+		background:
+			linear-gradient(135deg, rgba(53,230,159,0.16), rgba(0,230,255,0.08)),
+			rgba(10,14,24,0.92);
+		box-shadow: 0 0 0 1px rgba(53,230,159,0.12), 0 18px 60px rgba(0,0,0,0.3);
+		animation: tnBannerIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+	}
+	.tn-signup-success-banner strong {
+		display: block;
+		color: #35e69f;
+		font-family: Outfit, Inter, sans-serif;
+		font-size: 1.2rem;
+		font-weight: 900;
+		letter-spacing: 0.02em;
+	}
+	.tn-signup-success-banner p {
+		margin: 0.2rem 0 0;
+		color: #b7bdcf;
+		font-size: 0.95rem;
+		line-height: 1.45;
+	}
+	.tn-signup-success-banner a { color: #00e6ff; }
+	.tn-signup-success-check {
+		flex: 0 0 auto;
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		background: #35e69f;
+		position: relative;
+		animation: tnCheckPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+	}
+	.tn-signup-success-check::after {
+		content: '';
+		position: absolute;
+		left: 16px;
+		top: 10px;
+		width: 10px;
+		height: 20px;
+		border: solid #06121a;
+		border-width: 0 4px 4px 0;
+		transform: rotate(45deg);
+	}
+	@keyframes tnBannerIn {
+		from { opacity: 0; transform: translateY(-8px); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes tnCheckPop {
+		0% { transform: scale(0); }
+		70% { transform: scale(1.15); }
+		100% { transform: scale(1); }
+	}
+	.tn-signup-spinner {
+		display: inline-block;
+		width: 1em;
+		height: 1em;
+		margin-right: 0.5em;
+		vertical-align: -0.15em;
+		border: 2px solid currentColor;
+		border-right-color: transparent;
+		border-radius: 50%;
+		animation: tnSpin 0.7s linear infinite;
+	}
+	@keyframes tnSpin { to { transform: rotate(360deg); } }
+	form[data-tn-submitting] button { cursor: progress; }
+	@media (prefers-reduced-motion: reduce) {
+		.tn-signup-success-banner, .tn-signup-success-check { animation: none; }
+		.tn-signup-spinner { animation-duration: 1.4s; }
+	}
+	</style>
+	<script>
+	(function(){
+		var actions = ['tn_tde_event_signup', 'tn_tde_bulk_event_signup', 'tn_tde_email_signup_summary', 'tn_tde_manage_signup_update', 'tn_tde_manage_signup_cancel'];
+		function guardForms() {
+			document.querySelectorAll('form').forEach(function(form) {
+				var action = form.querySelector('input[name="action"]');
+				if (!action || actions.indexOf(action.value) === -1 || form.dataset.tnGuard) return;
+				form.dataset.tnGuard = '1';
+				form.addEventListener('submit', function(event) {
+					if (event.defaultPrevented) return;
+					if (form.dataset.tnSubmitting) {
+						event.preventDefault();
+						return;
+					}
+					form.dataset.tnSubmitting = '1';
+					form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(button) {
+						button.disabled = true;
+						var label = button.dataset.tnSavingLabel || 'Saving...';
+						if (button.tagName === 'INPUT') { button.value = label; return; }
+						button.innerHTML = '<span class="tn-signup-spinner" aria-hidden="true"></span>' + label;
+					});
+				});
+			});
+		}
+		function revealOutcome() {
+			var banner = document.querySelector('.tn-signup-success-banner, .tn-signup-page-message.is-error, .tn-dynamic-event-signup-message.is-error');
+			if (banner && banner.scrollIntoView) banner.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		}
+		function init() { guardForms(); revealOutcome(); }
+		if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+		else init();
+	})();
+	</script>
+	<?php
+}, 110 );
 
 add_action( 'init', function() {
 	register_post_type( 'tn_tde_signup', [
@@ -4564,7 +4686,7 @@ function tn_tde_render_manage_signups_page() {
 							<label for="tn_manage_lookup_company">Leave this field blank</label>
 							<input type="text" id="tn_manage_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
 						</p>
-						<button type="submit">Email Me a Link</button>
+						<button type="submit" data-tn-saving-label="Sending...">Email Me a Link</button>
 					</form>
 				</section>
 			<?php elseif ( ! $signup_ids ) : ?>
@@ -4611,7 +4733,7 @@ function tn_tde_render_manage_signups_page() {
 												<?php endforeach; ?>
 											</select>
 										</p>
-										<button type="submit" class="tn-manage-save">Save Change</button>
+										<button type="submit" class="tn-manage-save" data-tn-saving-label="Saving...">Save Change</button>
 									</form>
 								<?php else : ?>
 									<span class="tn-manage-card-when">Flight changes are not available for this event.</span>
@@ -4621,7 +4743,7 @@ function tn_tde_render_manage_signups_page() {
 									<input type="hidden" name="tn_token" value="<?php echo esc_attr( $token ); ?>">
 									<input type="hidden" name="signup_id" value="<?php echo esc_attr( $signup_id ); ?>">
 									<?php wp_nonce_field( 'tn_tde_manage_signup_' . $signup_id, 'tn_tde_manage_nonce' ); ?>
-									<button type="submit" class="tn-manage-cancel">Cancel Signup</button>
+									<button type="submit" class="tn-manage-cancel" data-tn-saving-label="Cancelling...">Cancel Signup</button>
 								</form>
 							</div>
 						</section>
@@ -5116,7 +5238,13 @@ function tn_tde_render_signup_page() {
 				<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
 			</div>
 			<?php if ( $status === 'success' ) : ?>
-				<p class="tn-signup-page-message is-success"><?php echo esc_html( $count > 1 ? 'Thanks! ' . $count . ' signups were received.' : 'Thanks! Your signup was received.' ); ?></p>
+				<div class="tn-signup-success-banner" role="status">
+				<span class="tn-signup-success-check" aria-hidden="true"></span>
+				<div>
+					<strong><?php echo esc_html( $count > 1 ? $count . ' signups received!' : 'Signup received!' ); ?></strong>
+					<p>You&#8217;re on the list. Want a record or need to make changes later? Use the email tool below to get a summary and a manage link.</p>
+				</div>
+			</div>
 			<?php elseif ( in_array( $status, [ 'invalid', 'closed', 'missing', 'spam', 'error' ], true ) ) : ?>
 				<p class="tn-signup-page-message is-error">Sorry, that signup could not be saved. Please check the required fields and try again.</p>
 			<?php endif; ?>
@@ -5141,7 +5269,7 @@ function tn_tde_render_signup_page() {
 				</p>
 				<div class="tn-signup-actions">
 					<button type="button" class="tn-signup-add" data-tn-add-event>Add Another Event</button>
-					<button type="submit" class="tn-signup-submit">Submit Signups</button>
+					<button type="submit" class="tn-signup-submit" data-tn-saving-label="Submitting Signups...">Submit Signups</button>
 				</div>
 			</form>
 			<section class="tn-signup-lookup" aria-labelledby="tn-signup-lookup-title">
@@ -5164,7 +5292,7 @@ function tn_tde_render_signup_page() {
 						<label for="tn_signup_lookup_company">Leave this field blank</label>
 						<input type="text" id="tn_signup_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
 					</p>
-					<button type="submit" class="tn-signup-submit">Email My Signups</button>
+					<button type="submit" class="tn-signup-submit" data-tn-saving-label="Sending...">Email My Signups</button>
 				</form>
 			</section>
 		</div>
