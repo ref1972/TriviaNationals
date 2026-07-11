@@ -7,6 +7,14 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+add_action( 'template_redirect', function () {
+	if ( is_admin() ) return;
+	$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ), '/' );
+	if ( strtolower( $path ) !== 'tickets' ) return;
+	wp_safe_redirect( home_url( '/#tickets' ), 301 );
+	exit;
+}, 1 );
+
 // ─── WooCommerce page header & lighter styling ───────────────────────────────
 
 add_action( 'wp_head', function () {
@@ -738,24 +746,24 @@ add_action( 'wp_footer', function () {
 	$how_it_works_content = $how_it_works_page ? tn_tde_render_page_body_content( $how_it_works_page ) : '';
 	$quotes = tn_tde_get_homepage_quotes();
 	$faqs = tn_tde_get_homepage_faqs();
-	$jeopardy_video_url = plugins_url( 'assets/tn-jeopardy-preview.mp4', __FILE__ );
-	$jeopardy_video_poster_url = plugins_url( 'assets/tn-jeopardy-preview-poster.png', __FILE__ );
+	$jeopardy_video_url = 'https://trivianationals.org/wp-content/uploads/2026/07/tn-jeopardy-preview.mp4';
+$jeopardy_video_poster_url = 'https://trivianationals.org/wp-content/uploads/2026/07/tn-jeopardy-preview-poster.jpg';
 	?>
 	<div id="tn-managed-homepage-sections" hidden>
 		<section id="jeopardy" class="tn-managed-section tn-jeopardy-section" aria-labelledby="tn-jeopardy-title">
 			<div class="container">
 				<p class="section-label">Jeopardy</p>
-				<h2 class="section-title" id="tn-jeopardy-title"><?php echo esc_html( $jeopardy_page ? get_the_title( $jeopardy_page ) : 'Jeopardy at Trivia Nationals' ); ?></h2>
 				<div class="tn-jeopardy-content">
-					<div class="tn-jeopardy-copy"><?php echo $jeopardy_content ?: '<p>Jeopardy staff will be onsite throughout Trivia Nationals weekend. More details are coming soon.</p>'; ?></div>
+					<div class="tn-jeopardy-main">
+						<h2 class="section-title" id="tn-jeopardy-title"><?php echo esc_html( $jeopardy_page ? get_the_title( $jeopardy_page ) : 'Jeopardy at Trivia Nationals' ); ?></h2>
+						<div class="tn-jeopardy-copy"><?php echo $jeopardy_content ?: '<p>Jeopardy staff will be onsite throughout Trivia Nationals weekend. More details are coming soon.</p>'; ?></div>
+					</div>
 					<aside class="tn-jeopardy-video-card" aria-label="Jeopardy preview video">
 						<div class="tn-jeopardy-video-frame">
 							<video controls playsinline preload="metadata" poster="<?php echo esc_url( $jeopardy_video_poster_url ); ?>">
 								<source src="<?php echo esc_url( $jeopardy_video_url ); ?>" type="video/mp4">
 							</video>
 						</div>
-						<p class="tn-jeopardy-video-title">Jeopardy Preview</p>
-						<p class="tn-jeopardy-video-note">A quick look at the buzzer-game energy.</p>
 					</aside>
 				</div>
 			</div>
@@ -806,7 +814,169 @@ add_action( 'wp_footer', function () {
 }, 8 );
 
 add_action( 'wp_head', function () {
-	if ( is_admin() || ! ( is_front_page() || is_page( 5 ) ) ) return;
+	if ( is_admin() ) return;
+	?>
+	<style id="tn-footer-newsletter-css">
+	body footer .tn-footer-newsletter {
+		display: grid;
+		grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+		align-items: center;
+		gap: clamp(1.2rem, 4vw, 2.5rem);
+		width: min(1080px, calc(100% - 2rem));
+		margin: 0 auto 2.25rem;
+		padding: clamp(1.15rem, 3vw, 1.65rem);
+		border: 1px solid rgba(0,229,255,0.22);
+		border-radius: 14px;
+		background:
+			linear-gradient(135deg, rgba(0,229,255,0.08), rgba(255,45,149,0.055)),
+			rgba(12,16,31,0.72);
+		box-shadow: 0 18px 54px rgba(0,0,0,0.24);
+		text-align: left;
+	}
+	body footer .tn-footer-newsletter-kicker {
+		margin: 0 0 0.4rem;
+		color: #00e5ff;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: 0.74rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter h2 {
+		margin: 0 0 0.45rem;
+		color: #f7f8ff;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: clamp(1.5rem, 3vw, 2.15rem);
+		font-weight: 900;
+		letter-spacing: 0;
+		line-height: 1.02;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter-copy p:last-child {
+		margin: 0;
+		max-width: 34rem;
+		color: #cdd4ea;
+		font-size: 0.95rem;
+		line-height: 1.55;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.7rem;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields p {
+		margin: 0;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(3),
+	body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(4) {
+		grid-column: span 2;
+	}
+	body footer .tn-footer-newsletter label {
+		display: grid;
+		gap: 0.34rem;
+		color: #cdd4ea;
+		font-size: 0.74rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter input[type="text"],
+	body footer .tn-footer-newsletter input[type="email"] {
+		width: 100%;
+		min-height: 46px;
+		padding: 0.72rem 0.85rem;
+		border: 1px solid rgba(255,255,255,0.14);
+		border-radius: 8px;
+		background: rgba(7,8,18,0.72);
+		color: #f7f8ff;
+		font: 600 0.95rem Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	body footer .tn-footer-newsletter input[type="text"]:focus,
+	body footer .tn-footer-newsletter input[type="email"]:focus {
+		border-color: rgba(0,229,255,0.72);
+		box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
+		outline: none;
+	}
+	body footer .tn-footer-newsletter input[type="submit"] {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		width: 100%;
+		border: 1px solid rgba(255,209,102,0.82);
+		border-radius: 999px;
+		background: #ffd166;
+		color: #071019;
+		cursor: pointer;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: 0.82rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter input[type="submit"]:hover {
+		background: #ffe08a;
+	}
+	body footer .tn-footer-newsletter .mc4wp-response {
+		grid-column: span 2;
+		color: #cdd4ea;
+		font-size: 0.9rem;
+	}
+	@media (max-width: 760px) {
+		body footer .tn-footer-newsletter,
+		body footer .tn-footer-newsletter .mc4wp-form-fields {
+			grid-template-columns: 1fr;
+		}
+		body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(3),
+		body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(4),
+		body footer .tn-footer-newsletter .mc4wp-response {
+			grid-column: auto;
+		}
+	}
+	</style>
+	<?php
+}, 18 );
+
+add_action( 'wp_footer', function () {
+	if ( is_admin() ) return;
+	$form_markup = shortcode_exists( 'mc4wp_form' ) ? do_shortcode( '[mc4wp_form id="17615"]' ) : '';
+	if ( trim( $form_markup ) === '' ) return;
+	?>
+	<div id="tn-home-newsletter-source" hidden><?php echo $form_markup; ?></div>
+	<script>
+	(function(){
+		function installFooterNewsletter() {
+			var footer = document.querySelector('footer');
+			var source = document.getElementById('tn-home-newsletter-source');
+			if (!footer || !source || footer.querySelector('.tn-footer-newsletter')) return;
+			var form = source.querySelector('.mc4wp-form');
+			if (!form) return;
+			footer.querySelectorAll('.widget_mc4wp_form_widget').forEach(function(widget) {
+				widget.remove();
+			});
+			var panel = document.createElement('section');
+			panel.className = 'tn-footer-newsletter';
+			panel.setAttribute('aria-label', 'Trivia Nationals email signup');
+			panel.innerHTML =
+				'<div class="tn-footer-newsletter-copy">' +
+					'<p class="tn-footer-newsletter-kicker">Stay in the loop</p>' +
+					'<h2>Get Trivia Nationals updates</h2>' +
+					'<p>Schedule notes, ticket reminders, and the occasional bit of useful weekend intel. No noise.</p>' +
+				'</div>' +
+				'<div class="tn-footer-newsletter-form"></div>';
+			panel.querySelector('.tn-footer-newsletter-form').appendChild(form);
+			footer.insertBefore(panel, footer.firstElementChild || null);
+			source.remove();
+		}
+		if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installFooterNewsletter);
+		else installFooterNewsletter();
+	})();
+	</script>
+	<?php
+}, 99 );
+
+add_action( 'wp_head', function () {
+	if ( is_admin() || ! ( is_front_page() || is_page( 5 ) || is_page( 18797 ) ) ) return;
 	$home_event_list = tn_tde_get_home_event_list();
 	$home_event_types = tn_tde_home_event_types();
 	$homepage_sections = tn_tde_get_homepage_sections();
@@ -834,7 +1004,7 @@ add_action( 'wp_head', function () {
 		background:
 			linear-gradient(90deg, rgba(7,8,18,0.94) 0%, rgba(7,8,18,0.78) 44%, rgba(7,8,18,0.52) 100%),
 			linear-gradient(180deg, rgba(7,8,18,0.28) 0%, rgba(7,8,18,0.88) 100%),
-			url('<?php echo esc_url( $hero_background_url ); ?>') center 42% / cover no-repeat !important;
+			url('<?php echo esc_url( $hero_background_url ); ?>') center 28% / cover no-repeat !important;
 		height: auto !important;
 		justify-content: center !important;
 		min-height: 0 !important;
@@ -850,6 +1020,113 @@ add_action( 'wp_head', function () {
 	}
 	body.page-id-5 #hero.hero .hero-sub {
 		margin-bottom: 1.35rem !important;
+	}
+	body footer .tn-footer-newsletter {
+		display: grid;
+		grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+		align-items: center;
+		gap: clamp(1.2rem, 4vw, 2.5rem);
+		width: min(1080px, calc(100% - 2rem));
+		margin: 0 auto 2.25rem;
+		padding: clamp(1.15rem, 3vw, 1.65rem);
+		border: 1px solid rgba(0,229,255,0.22);
+		border-radius: 14px;
+		background:
+			linear-gradient(135deg, rgba(0,229,255,0.08), rgba(255,45,149,0.055)),
+			rgba(12,16,31,0.72);
+		box-shadow: 0 18px 54px rgba(0,0,0,0.24);
+		text-align: left;
+	}
+	body footer .tn-footer-newsletter-kicker {
+		margin: 0 0 0.4rem;
+		color: #00e5ff;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: 0.74rem;
+		font-weight: 900;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter h2 {
+		margin: 0 0 0.45rem;
+		color: #f7f8ff;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: clamp(1.5rem, 3vw, 2.15rem);
+		font-weight: 900;
+		letter-spacing: 0;
+		line-height: 1.02;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter-copy p:last-child {
+		margin: 0;
+		max-width: 34rem;
+		color: #cdd4ea;
+		font-size: 0.95rem;
+		line-height: 1.55;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.7rem;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields p {
+		margin: 0;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(3) {
+		grid-column: span 2;
+	}
+	body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(4) {
+		grid-column: span 2;
+	}
+	body footer .tn-footer-newsletter label {
+		display: grid;
+		gap: 0.34rem;
+		color: #cdd4ea;
+		font-size: 0.74rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter input[type="text"],
+	body footer .tn-footer-newsletter input[type="email"] {
+		width: 100%;
+		min-height: 46px;
+		padding: 0.72rem 0.85rem;
+		border: 1px solid rgba(255,255,255,0.14);
+		border-radius: 8px;
+		background: rgba(7,8,18,0.72);
+		color: #f7f8ff;
+		font: 600 0.95rem Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	body footer .tn-footer-newsletter input[type="text"]:focus,
+	body footer .tn-footer-newsletter input[type="email"]:focus {
+		border-color: rgba(0,229,255,0.72);
+		box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
+		outline: none;
+	}
+	body footer .tn-footer-newsletter input[type="submit"] {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 46px;
+		width: 100%;
+		border: 1px solid rgba(255,209,102,0.82);
+		border-radius: 999px;
+		background: #ffd166;
+		color: #071019;
+		cursor: pointer;
+		font-family: var(--font-display, Outfit, sans-serif);
+		font-size: 0.82rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	body footer .tn-footer-newsletter input[type="submit"]:hover {
+		background: #ffe08a;
+	}
+	body footer .tn-footer-newsletter .mc4wp-response {
+		grid-column: span 2;
+		color: #cdd4ea;
+		font-size: 0.9rem;
 	}
 	body.page-id-5 .schedule {
 		background:
@@ -978,7 +1255,7 @@ add_action( 'wp_head', function () {
 		text-transform: uppercase;
 	}
 	body.page-id-5 .tn-jeopardy-section .section-title {
-		font-size: clamp(2.45rem, 5.4vw, 4.45rem);
+		font-size: clamp(2.35rem, 4.9vw, 4.1rem);
 		line-height: 0.98;
 	}
 	body.page-id-5 .tn-jeopardy-section {
@@ -1027,21 +1304,6 @@ add_action( 'wp_head', function () {
 		aspect-ratio: 9 / 16;
 		object-fit: cover;
 		background: #050713;
-	}
-	body.page-id-5 .tn-jeopardy-video-title {
-		margin: 1rem 0 0.2rem;
-		color: #f7f8ff;
-		font-family: var(--font-display, Outfit, sans-serif);
-		font-size: clamp(1.05rem, 1.8vw, 1.25rem);
-		font-weight: 900;
-		line-height: 1.15;
-	}
-	body.page-id-5 .tn-jeopardy-video-note {
-		margin: 0;
-		color: #cdd4ea;
-		font-size: 0.95rem;
-		font-weight: 800;
-		line-height: 1.35;
 	}
 	body.page-id-5 .tn-jeopardy-copy {
 		color: #dfe4f5;
@@ -1303,6 +1565,15 @@ add_action( 'wp_head', function () {
 		body.page-id-5 .tn-home-event-list {
 			grid-template-columns: 1fr;
 		}
+		body footer .tn-footer-newsletter,
+		body footer .tn-footer-newsletter .mc4wp-form-fields {
+			grid-template-columns: 1fr;
+		}
+		body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(3),
+		body footer .tn-footer-newsletter .mc4wp-form-fields p:nth-child(4),
+		body footer .tn-footer-newsletter .mc4wp-response {
+			grid-column: auto;
+		}
 		body.page-id-5 .tn-jeopardy-content,
 		body.page-id-5 .tn-how-it-works-content,
 		body.page-id-5 .tn-quotes-grid {
@@ -1426,6 +1697,11 @@ add_action( 'wp_head', function () {
 			});
 			var actions = document.createElement('div');
 			actions.className = 'tn-home-event-actions';
+			var signupLink = document.createElement('a');
+			signupLink.className = 'tn-schedule-full-link tn-event-signup-link';
+			signupLink.href = <?php echo wp_json_encode( home_url( '/event-signups/' ) ); ?>;
+			signupLink.textContent = 'Sign Up for Events';
+			actions.appendChild(signupLink);
 			var link = document.createElement('a');
 			link.className = 'tn-schedule-full-link';
 			link.href = <?php echo wp_json_encode( home_url( '/full-schedule/' ) ); ?>;
@@ -2688,6 +2964,7 @@ function tn_tde_allowed_description_html() {
 		'i'      => [],
 		'u'      => [],
 		'p'      => [],
+		'div'    => [],
 		'ul'     => [],
 		'ol'     => [],
 		'li'     => [],
@@ -2849,6 +3126,1549 @@ function tn_tde_clean_sessions( $sessions ) {
 			'location' => $location,
 		];
 	}, $sessions ) ) );
+}
+
+// ─── Event signup forms + Google Sheets sync ────────────────────────────────
+
+function tn_tde_signup_event_titles() {
+	return [
+		'Quiz Bowl',
+		'BP Titans',
+		'5x5',
+		'5 x 5',
+		'Trivia The Gathering',
+		'Trivia the Gathering',
+		'TTG',
+		'Trivia Spelling Bee',
+		'Academic Bee',
+		'Pop Culture Bee',
+		'Crossword Challenge',
+		'IQA Individual Championship',
+		'IQA Individual Quiz Championship',
+		'IQA Knock Out Quiz with Steve Perry',
+	];
+}
+
+function tn_tde_signup_team_event_titles() {
+	return [ 'Quiz Bowl', 'BP Titans' ];
+}
+
+function tn_tde_signup_normalize_title( $title ) {
+	return trim( (string) preg_replace( '/[^a-z0-9]+/', ' ', strtolower( (string) $title ) ) );
+}
+
+function tn_tde_signup_title_matches( $title, $allowed_titles ) {
+	$title = tn_tde_signup_normalize_title( $title );
+	foreach ( $allowed_titles as $allowed_title ) {
+		$allowed = tn_tde_signup_normalize_title( $allowed_title );
+		if ( $title === $allowed || strpos( $title, $allowed ) !== false ) return true;
+	}
+	return false;
+}
+
+function tn_tde_event_accepts_signup( $event ) {
+	$title = $event['base_title'] ?? $event['title'] ?? '';
+	if ( strpos( tn_tde_signup_normalize_title( $title ), 'finals' ) !== false ) return false;
+	return tn_tde_signup_title_matches( $title, tn_tde_signup_event_titles() );
+}
+
+function tn_tde_event_is_team_signup( $event ) {
+	$title = $event['base_title'] ?? $event['title'] ?? '';
+	if ( strpos( tn_tde_signup_normalize_title( $title ), 'finals' ) !== false ) return false;
+	return tn_tde_signup_title_matches( $title, tn_tde_signup_team_event_titles() );
+}
+
+function tn_tde_signup_split_flight_label( $label ) {
+	$label = trim( (string) $label );
+	if ( $label === '' ) return [];
+	$clean_label = $label;
+	if ( ! preg_match( '/^Flights?\s+(.+)$/i', $clean_label, $match ) ) {
+		return [ $clean_label ];
+	}
+	$flight_text = trim( preg_replace( '/\)+$/', '', $match[1] ) );
+	$flight_text = str_replace( [ '–', '—' ], '-', $flight_text );
+	$flights = [];
+	if ( preg_match( '/^([a-z])\s*-\s*([a-z])$/i', $flight_text, $range_match ) ) {
+		$start = ord( strtoupper( $range_match[1] ) );
+		$end = ord( strtoupper( $range_match[2] ) );
+		if ( $start <= $end ) {
+			for ( $letter = $start; $letter <= $end; $letter++ ) {
+				$flights[] = 'Flight ' . chr( $letter );
+			}
+			return $flights;
+		}
+	}
+	foreach ( preg_split( '/\s*(?:,|&|\band\b)\s*/i', $flight_text ) as $part ) {
+		$part = trim( preg_replace( '/[^a-z0-9 -]+/i', '', preg_replace( '/\)+$/', '', $part ) ) );
+		if ( $part === '' ) continue;
+		$flights[] = preg_match( '/^Flight\s+/i', $part ) ? $part : 'Flight ' . $part;
+	}
+	return $flights ?: [ $clean_label ];
+}
+
+function tn_tde_signup_option_time_label( $event ) {
+	$date = trim( sanitize_text_field( ( $event['day_label'] ?? '' ) . ( ! empty( $event['date_label'] ) ? ', ' . $event['date_label'] : '' ) ) );
+	$start = trim( sanitize_text_field( $event['start'] ?? '' ) );
+	$end = trim( sanitize_text_field( $event['end'] ?? '' ) );
+	$time = $start && $end ? $start . ' - ' . $end : $start;
+	if ( $date && $time ) return $date . ', ' . $time;
+	return $date ?: $time;
+}
+
+function tn_tde_signup_is_ttg_event( $event ) {
+	$title = $event['base_title'] ?? $event['title'] ?? '';
+	return tn_tde_signup_title_matches( $title, [ 'Trivia The Gathering', 'Trivia the Gathering', 'TTG' ] );
+}
+
+function tn_tde_signup_ttg_flight_labels() {
+	return [ 'Flight A', 'Flight B', 'Flight C', 'Flight D', 'Flight E' ];
+}
+
+function tn_tde_signup_is_friday_event( $event ) {
+	$day_date = strtolower( trim( (string) ( $event['day_label'] ?? '' ) . ' ' . (string) ( $event['date_label'] ?? '' ) ) );
+	return strpos( $day_date, 'friday' ) !== false;
+}
+
+function tn_tde_signup_custom_flight_time_label( $event, $flight_label ) {
+	if ( ! tn_tde_signup_is_ttg_event( $event ) ) return '';
+	if ( ! tn_tde_signup_is_friday_event( $event ) && empty( $event['_tn_tde_force_ttg_friday'] ) ) return '';
+	$flight_key = strtoupper( trim( preg_replace( '/^Flight\s+/i', '', (string) $flight_label ) ) );
+	$times = [
+		'A' => '12:55 PM - 1:30 PM',
+		'B' => '1:30 PM - 2:10 PM',
+		'C' => '2:10 PM - 2:50 PM',
+		'D' => '2:50 PM - 3:30 PM',
+		'E' => '3:30 PM - 4:10 PM',
+	];
+	if ( empty( $times[ $flight_key ] ) ) return '';
+	$date = trim( sanitize_text_field( ( $event['day_label'] ?? '' ) . ( ! empty( $event['date_label'] ) ? ', ' . $event['date_label'] : '' ) ) );
+	if ( $date === '' && ! empty( $event['_tn_tde_force_ttg_friday'] ) ) $date = 'Friday, August 7, 2026';
+	return $date ? $date . ', ' . $times[ $flight_key ] : $times[ $flight_key ];
+}
+
+function tn_tde_signup_flight_dedupe_key( $flight_label ) {
+	$flight_label = trim( (string) $flight_label );
+	if ( preg_match( '/^Flight\s+([a-z0-9]+)/i', $flight_label, $match ) ) {
+		return 'flight-' . strtolower( $match[1] );
+	}
+	return strtolower( $flight_label );
+}
+
+function tn_tde_signup_flight_options_for_event( $event ) {
+	$base_title = sanitize_text_field( $event['base_title'] ?? $event['title'] ?? '' );
+	if ( $base_title === '' ) return [];
+	$options = [];
+	$ttg_fallback_event = null;
+	foreach ( tn_tde_get_home_schedule_events() as $candidate ) {
+		if ( sanitize_text_field( $candidate['base_title'] ?? $candidate['title'] ?? '' ) !== $base_title ) continue;
+		if ( tn_tde_signup_is_ttg_event( $candidate ) ) {
+			if ( tn_tde_signup_is_friday_event( $candidate ) || ! $ttg_fallback_event ) $ttg_fallback_event = $candidate;
+		}
+		$label = sanitize_text_field( $candidate['session_label'] ?? '' );
+		$flight_labels = $label === '' && tn_tde_signup_is_ttg_event( $candidate ) && tn_tde_signup_is_friday_event( $candidate ) ? tn_tde_signup_ttg_flight_labels() : tn_tde_signup_split_flight_label( $label );
+		if ( ! $flight_labels ) continue;
+		$time_label = tn_tde_signup_option_time_label( $candidate );
+		foreach ( $flight_labels as $flight_label ) {
+			$flight_time_label = tn_tde_signup_custom_flight_time_label( $candidate, $flight_label ) ?: $time_label;
+			$option_label = $flight_time_label ? $flight_label . ' - ' . $flight_time_label : $flight_label;
+			$flight_key = tn_tde_signup_flight_dedupe_key( $flight_label );
+			if ( isset( $options[ $flight_key ] ) ) continue; // Only show the first (earliest) occurrence of each flight letter.
+			$options[ $flight_key ] = [
+				'value' => $option_label,
+				'label' => $option_label,
+				'flight' => $flight_label,
+				'session' => $label,
+				'event' => $candidate,
+				'event_slug' => tn_tde_event_detail_slug( $candidate ),
+			];
+		}
+	}
+	if ( ! $options && tn_tde_signup_is_ttg_event( $event ) ) {
+		$fallback_event = is_array( $ttg_fallback_event ) ? $ttg_fallback_event : $event;
+		$fallback_event['_tn_tde_force_ttg_friday'] = true;
+		foreach ( tn_tde_signup_ttg_flight_labels() as $flight_label ) {
+			$option_label = $flight_label . ' - ' . tn_tde_signup_custom_flight_time_label( $fallback_event, $flight_label );
+			$options[ strtolower( $option_label ) ] = [
+				'value' => $option_label,
+				'label' => $option_label,
+				'flight' => $flight_label,
+				'session' => '',
+				'event' => $fallback_event,
+				'event_slug' => tn_tde_event_detail_slug( $fallback_event ),
+			];
+		}
+	}
+	return array_values( $options );
+}
+
+function tn_tde_signup_option_for_value( $event, $flight_value ) {
+	$flight_value = sanitize_text_field( $flight_value );
+	foreach ( tn_tde_signup_flight_options_for_event( $event ) as $option ) {
+		if ( $option['value'] === $flight_value ) return $option;
+	}
+	return null;
+}
+
+function tn_tde_signup_events_for_page() {
+	$choices = [];
+	foreach ( tn_tde_get_home_schedule_events() as $event ) {
+		if ( ! tn_tde_event_accepts_signup( $event ) ) continue;
+		$title = sanitize_text_field( $event['base_title'] ?? $event['title'] ?? '' );
+		if ( $title === '' ) continue;
+		$key = tn_tde_signup_normalize_title( $title );
+		if ( isset( $choices[ $key ] ) ) continue;
+		$choices[ $key ] = [
+			'title' => $title,
+			'slug' => tn_tde_event_detail_slug( $event ),
+			'isTeam' => tn_tde_event_is_team_signup( $event ),
+			'flights' => array_map( static function( $option ) {
+				return [
+					'value' => $option['value'],
+					'label' => $option['label'],
+				];
+			}, tn_tde_signup_flight_options_for_event( $event ) ),
+		];
+	}
+	return array_values( $choices );
+}
+
+function tn_tde_render_event_signup_form( $event ) {
+	if ( ! tn_tde_event_accepts_signup( $event ) ) return '';
+	$status = isset( $_GET['tn_signup'] ) ? sanitize_key( wp_unslash( $_GET['tn_signup'] ) ) : '';
+	$event_slug = tn_tde_event_detail_slug( $event );
+	$flights = tn_tde_signup_flight_options_for_event( $event );
+	$current_flight = sanitize_text_field( $event['session_label'] ?? '' );
+	$is_team_signup = tn_tde_event_is_team_signup( $event );
+	ob_start();
+	?>
+	<section class="tn-dynamic-event-signup" aria-label="<?php echo esc_attr( $event['base_title'] ?? $event['title'] ?? 'Event' ); ?> signup">
+		<h2>Sign Up</h2>
+		<div class="tn-signup-note" role="note">
+			<p><strong>Important:</strong> You must be registered for Trivia Nationals 2026 before signing up for events.</p>
+			<p>You may sign up for only one flight per event.</p>
+			<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
+		</div>
+		<?php if ( $status === 'success' ) : ?>
+			<p class="tn-dynamic-event-signup-message is-success">Thanks! Your signup was received.</p>
+		<?php elseif ( in_array( $status, [ 'invalid', 'closed', 'missing', 'spam', 'error' ], true ) ) : ?>
+			<p class="tn-dynamic-event-signup-message is-error">Sorry, that signup could not be saved. Please check the required fields and try again.</p>
+		<?php endif; ?>
+		<form class="tn-dynamic-event-signup-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="tn_tde_event_signup">
+			<input type="hidden" name="tn_event_slug" value="<?php echo esc_attr( $event_slug ); ?>">
+			<input type="hidden" name="tn_signup_redirect" value="<?php echo esc_url( remove_query_arg( 'tn_signup' ) ); ?>">
+			<?php wp_nonce_field( 'tn_tde_event_signup', 'tn_tde_event_signup_nonce' ); ?>
+			<p>
+				<label for="tn_signup_name">Name *</label>
+				<input type="text" id="tn_signup_name" name="tn_signup_name" required autocomplete="name">
+			</p>
+			<p>
+				<label for="tn_signup_email">Contact Email *</label>
+				<input type="email" id="tn_signup_email" name="tn_signup_email" required autocomplete="email">
+			</p>
+			<?php if ( $flights ) : ?>
+				<p>
+					<label for="tn_signup_flight">Flight *</label>
+					<select id="tn_signup_flight" name="tn_signup_flight" required>
+						<option value="">Select a flight</option>
+						<?php
+						$current_flight_parts = tn_tde_signup_split_flight_label( $current_flight );
+						$current_flight_selected = false;
+						foreach ( $flights as $flight ) :
+							$is_current_flight = ! $current_flight_selected && in_array( $flight['flight'], $current_flight_parts, true );
+							if ( $is_current_flight ) $current_flight_selected = true;
+							?>
+							<option value="<?php echo esc_attr( $flight['value'] ); ?>" <?php selected( $is_current_flight ); ?>><?php echo esc_html( $flight['label'] ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</p>
+			<?php endif; ?>
+			<?php if ( $is_team_signup ) : ?>
+				<p class="is-full">
+					<label for="tn_signup_team">Team Name</label>
+					<input type="text" id="tn_signup_team" name="tn_signup_team" autocomplete="organization">
+				</p>
+				<p class="is-full">
+					<label for="tn_signup_team_members">Team Members</label>
+					<textarea id="tn_signup_team_members" name="tn_signup_team_members" rows="3" placeholder="One person can register the whole team. List teammates here if you have them."></textarea>
+				</p>
+			<?php endif; ?>
+			<p class="is-full">
+				<label for="tn_signup_notes">Notes</label>
+				<textarea id="tn_signup_notes" name="tn_signup_notes" rows="3"></textarea>
+			</p>
+			<p class="tn-signup-trap" aria-hidden="true">
+				<label for="tn_signup_referrer_check">Leave this field blank</label>
+				<input type="text" id="tn_signup_referrer_check" name="tn_signup_referrer_check" tabindex="-1" autocomplete="new-password">
+			</p>
+			<p class="is-full">
+				<button type="submit">Submit Signup</button>
+			</p>
+		</form>
+	</section>
+	<?php
+	return (string) ob_get_clean();
+}
+
+add_action( 'init', function() {
+	register_post_type( 'tn_tde_signup', [
+		'labels' => [
+			'name' => 'Event Signups',
+			'singular_name' => 'Event Signup',
+			'menu_name' => 'Signups',
+			'edit_item' => 'View Signup',
+			'search_items' => 'Search Signups',
+			'not_found' => 'No signups found',
+		],
+		'public' => false,
+		'show_ui' => true,
+		'show_in_menu' => 'trivia-desc-editor',
+		'capability_type' => 'post',
+		'capabilities' => [ 'create_posts' => 'do_not_allow' ],
+		'map_meta_cap' => true,
+		'supports' => [ 'title', 'custom-fields' ],
+	] );
+} );
+
+function tn_tde_signup_meta_value( $post_id, $key ) {
+	return (string) get_post_meta( $post_id, '_tn_tde_signup_' . $key, true );
+}
+
+function tn_tde_signup_statuses() {
+	return [
+		'active' => 'Active',
+		'cancelled' => 'Cancelled',
+		'spam' => 'Spam',
+		'duplicate' => 'Duplicate',
+	];
+}
+
+function tn_tde_signup_status( $post_id ) {
+	$status = sanitize_key( tn_tde_signup_meta_value( $post_id, 'status' ) );
+	$statuses = tn_tde_signup_statuses();
+	return isset( $statuses[ $status ] ) ? $status : 'active';
+}
+
+function tn_tde_signup_status_label( $status ) {
+	$statuses = tn_tde_signup_statuses();
+	return $statuses[ $status ] ?? $statuses['active'];
+}
+
+add_filter( 'manage_tn_tde_signup_posts_columns', function( $columns ) {
+	return [
+		'cb' => $columns['cb'] ?? '<input type="checkbox" />',
+		'title' => 'Signup',
+		'tn_signup_event' => 'Event',
+		'tn_signup_person' => 'Name',
+		'tn_signup_email' => 'Contact Email',
+		'tn_signup_flight' => 'Flight',
+		'tn_signup_status' => 'Status',
+		'tn_signup_sync' => 'Google Sheets',
+		'date' => $columns['date'] ?? 'Date',
+	];
+} );
+
+add_action( 'manage_tn_tde_signup_posts_custom_column', function( $column, $post_id ) {
+	if ( $column === 'tn_signup_event' ) {
+		$event = tn_tde_signup_meta_value( $post_id, 'event_title' );
+		$session = tn_tde_signup_meta_value( $post_id, 'event_session' );
+		echo esc_html( trim( $event . ( $session ? ' - ' . $session : '' ) ) );
+		return;
+	}
+	if ( $column === 'tn_signup_person' ) {
+		echo esc_html( tn_tde_signup_meta_value( $post_id, 'name' ) );
+		return;
+	}
+	if ( $column === 'tn_signup_email' ) {
+		$email = tn_tde_signup_meta_value( $post_id, 'email' );
+		if ( $email ) {
+			printf( '<a href="mailto:%1$s">%2$s</a>', esc_attr( $email ), esc_html( $email ) );
+		}
+		return;
+	}
+	if ( $column === 'tn_signup_flight' ) {
+		echo esc_html( tn_tde_signup_meta_value( $post_id, 'flight' ) );
+		return;
+	}
+	if ( $column === 'tn_signup_status' ) {
+		$status = tn_tde_signup_status( $post_id );
+		$changed_at = tn_tde_signup_meta_value( $post_id, 'status_changed_at' );
+		echo esc_html( tn_tde_signup_status_label( $status ) );
+		if ( $changed_at ) {
+			printf( '<br><small>%s</small>', esc_html( $changed_at ) );
+		}
+		return;
+	}
+	if ( $column === 'tn_signup_sync' ) {
+		$status = tn_tde_signup_meta_value( $post_id, 'sync_status' );
+		$error = tn_tde_signup_meta_value( $post_id, 'sync_error' );
+		if ( $status === '' ) $status = 'pending';
+		$label = ucfirst( $status );
+		if ( $error ) {
+			printf( '<strong>%1$s</strong><br><small>%2$s</small>', esc_html( $label ), esc_html( $error ) );
+		} else {
+			echo esc_html( $label );
+		}
+	}
+}, 10, 2 );
+
+add_action( 'add_meta_boxes', function() {
+	add_meta_box( 'tn_tde_signup_details', 'Signup Details', 'tn_tde_render_signup_details_meta_box', 'tn_tde_signup', 'normal', 'high' );
+} );
+
+function tn_tde_render_signup_details_meta_box( $post ) {
+	$fields = [
+		'event_title' => 'Event',
+		'event_session' => 'Session',
+		'event_day' => 'Day',
+		'event_date' => 'Date',
+		'event_start' => 'Start',
+		'event_end' => 'End',
+		'event_location' => 'Location',
+		'name' => 'Name',
+		'email' => 'Contact Email',
+		'flight' => 'Flight',
+		'team' => 'Team Name',
+		'team_members' => 'Team Members',
+		'notes' => 'Notes',
+		'status' => 'Signup Status',
+		'status_changed_at' => 'Status Changed At',
+		'status_reason' => 'Status Reason',
+		'sync_status' => 'Google Sheets Status',
+		'sync_error' => 'Google Sheets Error',
+	];
+	echo '<table class="widefat striped"><tbody>';
+	foreach ( $fields as $key => $label ) {
+		$value = tn_tde_signup_meta_value( $post->ID, $key );
+		if ( $key === 'status' && $value === '' ) $value = 'active';
+		if ( $key === 'sync_status' && $value === '' ) $value = 'pending';
+		printf(
+			'<tr><th style="width:180px;">%1$s</th><td style="white-space:pre-wrap;">%2$s</td></tr>',
+			esc_html( $label ),
+			esc_html( $value )
+		);
+	}
+	echo '</tbody></table>';
+}
+
+function tn_tde_signup_status_action_url( $signup_id, $status ) {
+	return wp_nonce_url(
+		add_query_arg(
+			[
+				'action' => 'tn_tde_set_signup_status',
+				'signup_id' => $signup_id,
+				'signup_status' => $status,
+			],
+			admin_url( 'admin-post.php' )
+		),
+		'tn_tde_set_signup_status_' . $signup_id . '_' . $status
+	);
+}
+
+add_filter( 'post_row_actions', function( $actions, $post ) {
+	if ( ! $post || $post->post_type !== 'tn_tde_signup' || ! current_user_can( 'edit_post', $post->ID ) ) return $actions;
+	$status = tn_tde_signup_status( $post->ID );
+	$url = wp_nonce_url(
+		add_query_arg(
+			[
+				'action' => 'tn_tde_resync_signup',
+				'signup_id' => $post->ID,
+			],
+			admin_url( 'admin-post.php' )
+		),
+		'tn_tde_resync_signup_' . $post->ID
+	);
+	$actions['tn_tde_resync_signup'] = '<a href="' . esc_url( $url ) . '">Sync to Google Sheets</a>';
+	$mark_url = wp_nonce_url(
+		add_query_arg(
+			[
+				'action' => 'tn_tde_mark_signup_synced',
+				'signup_id' => $post->ID,
+			],
+			admin_url( 'admin-post.php' )
+		),
+		'tn_tde_mark_signup_synced_' . $post->ID
+	);
+	$actions['tn_tde_mark_signup_synced'] = '<a href="' . esc_url( $mark_url ) . '">Mark synced</a>';
+	if ( $status === 'active' ) {
+		$actions['tn_tde_cancel_signup'] = '<a href="' . esc_url( tn_tde_signup_status_action_url( $post->ID, 'cancelled' ) ) . '">Cancel signup</a>';
+		$actions['tn_tde_spam_signup'] = '<a href="' . esc_url( tn_tde_signup_status_action_url( $post->ID, 'spam' ) ) . '">Mark spam</a>';
+	} else {
+		$actions['tn_tde_restore_signup'] = '<a href="' . esc_url( tn_tde_signup_status_action_url( $post->ID, 'active' ) ) . '">Restore</a>';
+	}
+	return $actions;
+}, 10, 2 );
+
+function tn_tde_mark_signup_ids_synced( $signup_ids ) {
+	$count = 0;
+	foreach ( array_filter( array_map( 'absint', (array) $signup_ids ) ) as $signup_id ) {
+		if ( ! current_user_can( 'edit_post', $signup_id ) ) continue;
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'synced' );
+		delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+		$count++;
+	}
+	return $count;
+}
+
+function tn_tde_resync_signup_ids( $signup_ids ) {
+	$results = [ 'synced' => 0, 'failed' => 0 ];
+	foreach ( array_filter( array_map( 'absint', (array) $signup_ids ) ) as $signup_id ) {
+		if ( ! current_user_can( 'edit_post', $signup_id ) ) continue;
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'pending' );
+		delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+		$ok = tn_tde_sync_event_signup( $signup_id );
+		$results[ $ok ? 'synced' : 'failed' ]++;
+	}
+	return $results;
+}
+
+function tn_tde_set_signup_ids_status( $signup_ids, $status, $reason = '' ) {
+	$statuses = tn_tde_signup_statuses();
+	$status = sanitize_key( $status );
+	if ( ! isset( $statuses[ $status ] ) ) return 0;
+	$count = 0;
+	foreach ( array_filter( array_map( 'absint', (array) $signup_ids ) ) as $signup_id ) {
+		if ( ! current_user_can( 'edit_post', $signup_id ) ) continue;
+		update_post_meta( $signup_id, '_tn_tde_signup_status', $status );
+		if ( $status === 'active' ) {
+			delete_post_meta( $signup_id, '_tn_tde_signup_status_changed_at' );
+			delete_post_meta( $signup_id, '_tn_tde_signup_status_reason' );
+		} else {
+			update_post_meta( $signup_id, '_tn_tde_signup_status_changed_at', current_time( 'mysql' ) );
+			update_post_meta( $signup_id, '_tn_tde_signup_status_reason', sanitize_text_field( $reason ?: tn_tde_signup_status_label( $status ) ) );
+		}
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'pending' );
+		delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+		tn_tde_sync_event_signup( $signup_id );
+		$count++;
+	}
+	return $count;
+}
+
+function tn_tde_pending_signup_ids() {
+	return get_posts( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'no_found_rows' => true,
+		'meta_query' => [
+			'relation' => 'OR',
+			[
+				'key' => '_tn_tde_signup_sync_status',
+				'value' => [ 'pending', 'failed' ],
+				'compare' => 'IN',
+			],
+			[
+				'key' => '_tn_tde_signup_sync_status',
+				'compare' => 'NOT EXISTS',
+			],
+		],
+	] );
+}
+
+// ─── Automatic retry for pending/failed Google Sheets signup syncs ──────────
+
+add_filter( 'cron_schedules', function( $schedules ) {
+	if ( ! isset( $schedules['tn_tde_fifteen_minutes'] ) ) {
+		$schedules['tn_tde_fifteen_minutes'] = [
+			'interval' => 15 * MINUTE_IN_SECONDS,
+			'display' => __( 'Every 15 Minutes (Trivia Nationals signup resync)', 'tn-tde' ),
+		];
+	}
+	return $schedules;
+} );
+
+add_action( 'init', function() {
+	if ( ! wp_next_scheduled( 'tn_tde_resync_pending_signups_cron' ) ) {
+		wp_schedule_event( time() + 5 * MINUTE_IN_SECONDS, 'tn_tde_fifteen_minutes', 'tn_tde_resync_pending_signups_cron' );
+	}
+} );
+
+add_action( 'tn_tde_resync_pending_signups_cron', function() {
+	$pending_ids = tn_tde_pending_signup_ids();
+	if ( ! $pending_ids ) return;
+	tn_tde_resync_signup_ids( $pending_ids );
+} );
+
+register_deactivation_hook( __FILE__, function() {
+	wp_clear_scheduled_hook( 'tn_tde_resync_pending_signups_cron' );
+} );
+
+add_action( 'admin_post_tn_tde_resync_signup', function() {
+	$signup_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
+	if ( ! $signup_id || ! current_user_can( 'edit_post', $signup_id ) ) {
+		wp_die( esc_html__( 'You do not have permission to sync this signup.', 'tn-tde' ) );
+	}
+	check_admin_referer( 'tn_tde_resync_signup_' . $signup_id );
+	update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'pending' );
+	delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+	$ok = tn_tde_sync_event_signup( $signup_id );
+	wp_safe_redirect( add_query_arg(
+		[
+			'post_type' => 'tn_tde_signup',
+			'tn_signup_resync' => $ok ? 'synced' : 'failed',
+		],
+		admin_url( 'edit.php' )
+	) );
+	exit;
+} );
+
+add_action( 'admin_post_tn_tde_mark_signup_synced', function() {
+	$signup_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
+	if ( ! $signup_id || ! current_user_can( 'edit_post', $signup_id ) ) {
+		wp_die( esc_html__( 'You do not have permission to update this signup.', 'tn-tde' ) );
+	}
+	check_admin_referer( 'tn_tde_mark_signup_synced_' . $signup_id );
+	tn_tde_mark_signup_ids_synced( [ $signup_id ] );
+	wp_safe_redirect( add_query_arg(
+		[
+			'post_type' => 'tn_tde_signup',
+			'tn_signup_marked_synced' => 1,
+		],
+		admin_url( 'edit.php' )
+	) );
+	exit;
+} );
+
+add_action( 'admin_post_tn_tde_set_signup_status', function() {
+	$signup_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
+	$status = isset( $_GET['signup_status'] ) ? sanitize_key( wp_unslash( $_GET['signup_status'] ) ) : '';
+	$statuses = tn_tde_signup_statuses();
+	if ( ! $signup_id || ! current_user_can( 'edit_post', $signup_id ) || ! isset( $statuses[ $status ] ) ) {
+		wp_die( esc_html__( 'You do not have permission to update this signup.', 'tn-tde' ) );
+	}
+	check_admin_referer( 'tn_tde_set_signup_status_' . $signup_id . '_' . $status );
+	tn_tde_set_signup_ids_status( [ $signup_id ], $status );
+	wp_safe_redirect( add_query_arg(
+		[
+			'post_type' => 'tn_tde_signup',
+			'tn_signup_status_updated' => $status,
+			'tn_signup_status_count' => 1,
+		],
+		admin_url( 'edit.php' )
+	) );
+	exit;
+} );
+
+add_action( 'admin_post_tn_tde_resync_pending_signups', function() {
+	if ( ! current_user_can( 'edit_posts' ) ) {
+		wp_die( esc_html__( 'You do not have permission to sync signups.', 'tn-tde' ) );
+	}
+	check_admin_referer( 'tn_tde_resync_pending_signups' );
+	$results = tn_tde_resync_signup_ids( tn_tde_pending_signup_ids() );
+	wp_safe_redirect( add_query_arg(
+		[
+			'post_type' => 'tn_tde_signup',
+			'tn_signup_bulk_synced' => $results['synced'],
+			'tn_signup_bulk_failed' => $results['failed'],
+		],
+		admin_url( 'edit.php' )
+	) );
+	exit;
+} );
+
+add_filter( 'bulk_actions-edit-tn_tde_signup', function( $actions ) {
+	$actions['tn_tde_resync_selected_signups'] = 'Sync to Google Sheets';
+	$actions['tn_tde_mark_selected_signups_synced'] = 'Mark as synced';
+	$actions['tn_tde_cancel_selected_signups'] = 'Cancel signup';
+	$actions['tn_tde_spam_selected_signups'] = 'Mark as spam';
+	$actions['tn_tde_restore_selected_signups'] = 'Restore signup';
+	return $actions;
+} );
+
+add_filter( 'handle_bulk_actions-edit-tn_tde_signup', function( $redirect_url, $action, $post_ids ) {
+	if ( ! current_user_can( 'edit_posts' ) ) return $redirect_url;
+	if ( $action === 'tn_tde_mark_selected_signups_synced' ) {
+		$count = tn_tde_mark_signup_ids_synced( $post_ids );
+		return add_query_arg(
+			[ 'tn_signup_marked_synced' => $count ],
+			remove_query_arg( [ 'tn_signup_resync' ], $redirect_url )
+		);
+	}
+	$status_actions = [
+		'tn_tde_cancel_selected_signups' => 'cancelled',
+		'tn_tde_spam_selected_signups' => 'spam',
+		'tn_tde_restore_selected_signups' => 'active',
+	];
+	if ( isset( $status_actions[ $action ] ) ) {
+		$status = $status_actions[ $action ];
+		$count = tn_tde_set_signup_ids_status( $post_ids, $status );
+		return add_query_arg(
+			[
+				'tn_signup_status_updated' => $status,
+				'tn_signup_status_count' => $count,
+			],
+			remove_query_arg( [ 'tn_signup_resync' ], $redirect_url )
+		);
+	}
+	if ( $action !== 'tn_tde_resync_selected_signups' ) return $redirect_url;
+	$results = tn_tde_resync_signup_ids( $post_ids );
+	return add_query_arg(
+		[
+			'tn_signup_bulk_synced' => $results['synced'],
+			'tn_signup_bulk_failed' => $results['failed'],
+		],
+		remove_query_arg( [ 'tn_signup_resync' ], $redirect_url )
+	);
+}, 10, 3 );
+
+add_action( 'admin_notices', function() {
+	if ( ! is_admin() || ( $_GET['post_type'] ?? '' ) !== 'tn_tde_signup' ) return;
+	$pending_count = count( tn_tde_pending_signup_ids() );
+	if ( $pending_count && current_user_can( 'edit_posts' ) ) {
+		$url = wp_nonce_url(
+			add_query_arg( 'action', 'tn_tde_resync_pending_signups', admin_url( 'admin-post.php' ) ),
+			'tn_tde_resync_pending_signups'
+		);
+		printf(
+			'<div class="notice notice-warning"><p><strong>%1$d signup%2$s pending or failed Google Sheets sync.</strong> <a class="button button-primary" href="%3$s">Sync pending/failed signups now</a></p></div>',
+			(int) $pending_count,
+			$pending_count === 1 ? '' : 's',
+			esc_url( $url )
+		);
+	}
+	if ( ! empty( $_GET['tn_signup_resync'] ) ) {
+		$status = sanitize_key( wp_unslash( $_GET['tn_signup_resync'] ) );
+		if ( $status === 'synced' ) {
+			echo '<div class="notice notice-success is-dismissible"><p>Signup synced to Google Sheets.</p></div>';
+		} elseif ( $status === 'failed' ) {
+			echo '<div class="notice notice-error is-dismissible"><p>Signup could not sync to Google Sheets. Check the Google Sheets status column for the saved error.</p></div>';
+		}
+	}
+	if ( isset( $_GET['tn_signup_bulk_synced'], $_GET['tn_signup_bulk_failed'] ) ) {
+		$synced = absint( $_GET['tn_signup_bulk_synced'] );
+		$failed = absint( $_GET['tn_signup_bulk_failed'] );
+		printf(
+			'<div class="notice %1$s is-dismissible"><p>Google Sheets sync complete: %2$d synced, %3$d failed.</p></div>',
+			$failed ? 'notice-error' : 'notice-success',
+			(int) $synced,
+			(int) $failed
+		);
+	}
+	if ( isset( $_GET['tn_signup_marked_synced'] ) ) {
+		$count = absint( $_GET['tn_signup_marked_synced'] );
+		printf(
+			'<div class="notice notice-success is-dismissible"><p>%1$d signup%2$s marked as synced.</p></div>',
+			(int) $count,
+			$count === 1 ? '' : 's'
+		);
+	}
+	if ( isset( $_GET['tn_signup_status_updated'], $_GET['tn_signup_status_count'] ) ) {
+		$status = sanitize_key( wp_unslash( $_GET['tn_signup_status_updated'] ) );
+		$count = absint( $_GET['tn_signup_status_count'] );
+		printf(
+			'<div class="notice notice-success is-dismissible"><p>%1$d signup%2$s set to %3$s. Google Sheets sync was attempted and the row status was saved in WordPress.</p></div>',
+			(int) $count,
+			$count === 1 ? '' : 's',
+			esc_html( strtolower( tn_tde_signup_status_label( $status ) ) )
+		);
+	}
+} );
+
+add_action( 'admin_post_tn_tde_event_signup', 'tn_tde_handle_event_signup' );
+add_action( 'admin_post_nopriv_tn_tde_event_signup', 'tn_tde_handle_event_signup' );
+add_action( 'admin_post_tn_tde_bulk_event_signup', 'tn_tde_handle_bulk_event_signup' );
+add_action( 'admin_post_nopriv_tn_tde_bulk_event_signup', 'tn_tde_handle_bulk_event_signup' );
+add_action( 'admin_post_tn_tde_email_signup_summary', 'tn_tde_handle_email_signup_summary' );
+add_action( 'admin_post_nopriv_tn_tde_email_signup_summary', 'tn_tde_handle_email_signup_summary' );
+add_action( 'tn_tde_sync_event_signup', 'tn_tde_sync_event_signup', 10, 1 );
+
+function tn_tde_create_event_signup( $event, $name, $email, $flight, $team, $team_members, $notes ) {
+	$flight_option = $flight !== '' ? tn_tde_signup_option_for_value( $event, $flight ) : null;
+	$signup_event = $flight_option && ! empty( $flight_option['event'] ) ? $flight_option['event'] : $event;
+	$signup_id = wp_insert_post( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'post_title' => sprintf( 'Signup: %s - %s', $signup_event['base_title'] ?? $signup_event['title'], $name ),
+	], true );
+	if ( is_wp_error( $signup_id ) ) return $signup_id;
+	$meta = [
+		'event_slug' => tn_tde_event_detail_slug( $signup_event ),
+		'event_title' => sanitize_text_field( $signup_event['base_title'] ?? $signup_event['title'] ?? '' ),
+		'event_session' => sanitize_text_field( $signup_event['session_label'] ?? '' ),
+		'event_day' => sanitize_text_field( $signup_event['day_label'] ?? '' ),
+		'event_date' => sanitize_text_field( $signup_event['date_label'] ?? '' ),
+		'event_start' => sanitize_text_field( $signup_event['start'] ?? '' ),
+		'event_end' => sanitize_text_field( $signup_event['end'] ?? '' ),
+		'event_location' => sanitize_text_field( $signup_event['location_label'] ?? '' ),
+		'name' => $name,
+		'email' => $email,
+		'flight' => $flight,
+		'team' => $team,
+		'team_members' => $team_members,
+		'notes' => $notes,
+		'status' => 'active',
+		'status_changed_at' => '',
+		'status_reason' => '',
+		'sync_status' => 'pending',
+	];
+	foreach ( $meta as $key => $value ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_' . $key, $value );
+	}
+	tn_tde_sync_event_signup( (int) $signup_id, 8 );
+	if ( tn_tde_signup_meta_value( $signup_id, 'sync_status' ) === 'pending' ) {
+		tn_tde_queue_event_signup_sync( (int) $signup_id );
+	}
+	return $signup_id;
+}
+
+function tn_tde_handle_event_signup() {
+	$slug = isset( $_POST['tn_event_slug'] ) ? sanitize_title( wp_unslash( $_POST['tn_event_slug'] ) ) : '';
+	$redirect = isset( $_POST['tn_signup_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['tn_signup_redirect'] ) ) : home_url( '/' );
+	if ( ! isset( $_POST['tn_tde_event_signup_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tn_tde_event_signup_nonce'] ) ), 'tn_tde_event_signup' ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'invalid', $redirect ) );
+		exit;
+	}
+	$honeypot = $_POST['tn_signup_referrer_check'] ?? $_POST['tn_signup_company'] ?? '';
+	if ( trim( (string) wp_unslash( $honeypot ) ) !== '' ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'spam', $redirect ) );
+		exit;
+	}
+	$event = tn_tde_get_event_by_detail_slug( $slug );
+	if ( ! $event || ! tn_tde_event_accepts_signup( $event ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'closed', $redirect ) );
+		exit;
+	}
+	$name = isset( $_POST['tn_signup_name'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_signup_name'] ) ) : '';
+	$email = isset( $_POST['tn_signup_email'] ) ? sanitize_email( wp_unslash( $_POST['tn_signup_email'] ) ) : '';
+	$flight = isset( $_POST['tn_signup_flight'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_signup_flight'] ) ) : '';
+	$team = tn_tde_event_is_team_signup( $event ) && isset( $_POST['tn_signup_team'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_signup_team'] ) ) : '';
+	$team_members = tn_tde_event_is_team_signup( $event ) && isset( $_POST['tn_signup_team_members'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tn_signup_team_members'] ) ) : '';
+	$notes = isset( $_POST['tn_signup_notes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['tn_signup_notes'] ) ) : '';
+	$flight_options = tn_tde_signup_flight_options_for_event( $event );
+	$flight_values = array_map( static function( $option ) { return $option['value']; }, $flight_options );
+	if ( $name === '' || ! is_email( $email ) || ( $flight_options && ! in_array( $flight, $flight_values, true ) ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'missing', $redirect ) );
+		exit;
+	}
+	$signup_id = tn_tde_create_event_signup( $event, $name, $email, $flight, $team, $team_members, $notes );
+	if ( is_wp_error( $signup_id ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'error', $redirect ) );
+		exit;
+	}
+	wp_safe_redirect( add_query_arg( 'tn_signup', 'success', $redirect ) );
+	exit;
+}
+
+function tn_tde_handle_bulk_event_signup() {
+	$redirect = isset( $_POST['tn_signup_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['tn_signup_redirect'] ) ) : home_url( '/event-signups/' );
+	if ( ! isset( $_POST['tn_tde_bulk_event_signup_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tn_tde_bulk_event_signup_nonce'] ) ), 'tn_tde_bulk_event_signup' ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'invalid', $redirect ) );
+		exit;
+	}
+	$honeypot = $_POST['tn_signup_referrer_check'] ?? '';
+	if ( trim( (string) wp_unslash( $honeypot ) ) !== '' ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'spam', $redirect ) );
+		exit;
+	}
+	$name = isset( $_POST['tn_signup_name'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_signup_name'] ) ) : '';
+	$email = isset( $_POST['tn_signup_email'] ) ? sanitize_email( wp_unslash( $_POST['tn_signup_email'] ) ) : '';
+	$entries = isset( $_POST['tn_signup_events'] ) && is_array( $_POST['tn_signup_events'] ) ? wp_unslash( $_POST['tn_signup_events'] ) : [];
+	if ( $name === '' || ! is_email( $email ) || ! $entries ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'missing', $redirect ) );
+		exit;
+	}
+	$count = 0;
+	foreach ( $entries as $entry ) {
+		if ( ! is_array( $entry ) ) continue;
+		$slug = isset( $entry['event_slug'] ) ? sanitize_title( $entry['event_slug'] ) : '';
+		$event = tn_tde_get_event_by_detail_slug( $slug );
+		if ( ! $event || ! tn_tde_event_accepts_signup( $event ) ) continue;
+		$flight = isset( $entry['flight'] ) ? sanitize_text_field( $entry['flight'] ) : '';
+		$flight_options = tn_tde_signup_flight_options_for_event( $event );
+		$flight_values = array_map( static function( $option ) { return $option['value']; }, $flight_options );
+		if ( $flight_options && ! in_array( $flight, $flight_values, true ) ) continue;
+		$team = tn_tde_event_is_team_signup( $event ) && isset( $entry['team'] ) ? sanitize_text_field( $entry['team'] ) : '';
+		$team_members = tn_tde_event_is_team_signup( $event ) && isset( $entry['team_members'] ) ? sanitize_textarea_field( $entry['team_members'] ) : '';
+		$notes = isset( $entry['notes'] ) ? sanitize_textarea_field( $entry['notes'] ) : '';
+		$signup_id = tn_tde_create_event_signup( $event, $name, $email, $flight, $team, $team_members, $notes );
+		if ( ! is_wp_error( $signup_id ) ) $count++;
+	}
+	if ( $count < 1 ) {
+		wp_safe_redirect( add_query_arg( 'tn_signup', 'missing', $redirect ) );
+		exit;
+	}
+	wp_safe_redirect( add_query_arg( [ 'tn_signup' => 'success', 'tn_signup_count' => $count ], $redirect ) );
+	exit;
+}
+
+function tn_tde_handle_email_signup_summary() {
+	$redirect = isset( $_POST['tn_signup_redirect'] ) ? esc_url_raw( wp_unslash( $_POST['tn_signup_redirect'] ) ) : home_url( '/event-signups/' );
+	if ( ! isset( $_POST['tn_tde_email_signup_summary_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tn_tde_email_signup_summary_nonce'] ) ), 'tn_tde_email_signup_summary' ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_lookup', 'invalid', $redirect ) );
+		exit;
+	}
+	$honeypot = $_POST['tn_signup_lookup_company'] ?? '';
+	if ( trim( (string) wp_unslash( $honeypot ) ) !== '' ) {
+		wp_safe_redirect( add_query_arg( 'tn_lookup', 'sent', $redirect ) );
+		exit;
+	}
+	$email = isset( $_POST['tn_signup_lookup_email'] ) ? sanitize_email( wp_unslash( $_POST['tn_signup_lookup_email'] ) ) : '';
+	if ( ! is_email( $email ) ) {
+		wp_safe_redirect( add_query_arg( 'tn_lookup', 'invalid', $redirect ) );
+		exit;
+	}
+	$sent = wp_mail(
+		$email,
+		'Your Trivia Nationals 2026 event signups',
+		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ) ),
+		[
+			'From: Trivia Nationals <info@trivianationals.org>',
+			'Reply-To: Trivia Nationals <info@trivianationals.org>',
+			'Content-Type: text/html; charset=UTF-8',
+		]
+	);
+	$status = $sent ? 'sent' : 'error';
+	wp_safe_redirect( add_query_arg( 'tn_lookup', $status, $redirect ) );
+	exit;
+}
+
+function tn_tde_signup_summary_rows_for_email( $email ) {
+	$ids = get_posts( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'orderby' => 'date',
+		'order' => 'ASC',
+		'no_found_rows' => true,
+		'meta_query' => [
+			'relation' => 'AND',
+			[
+				'key' => '_tn_tde_signup_email',
+				'value' => sanitize_email( $email ),
+				'compare' => '=',
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key' => '_tn_tde_signup_status',
+					'value' => 'active',
+					'compare' => '=',
+				],
+				[
+					'key' => '_tn_tde_signup_status',
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		],
+	] );
+	$fields = [
+		'event_title',
+		'event_session',
+		'event_day',
+		'event_date',
+		'event_start',
+		'event_end',
+		'event_location',
+		'name',
+		'email',
+		'flight',
+		'team',
+		'team_members',
+		'notes',
+		'status',
+		'status_changed_at',
+		'status_reason',
+	];
+	return array_map( static function( $id ) use ( $fields ) {
+		$row = [];
+		foreach ( $fields as $field ) {
+			$row[ $field ] = (string) get_post_meta( $id, '_tn_tde_signup_' . $field, true );
+		}
+		return $row;
+	}, $ids );
+}
+
+function tn_tde_signup_summary_email_html( $signups ) {
+	$styles = 'font-family:Arial,sans-serif;color:#222;line-height:1.5;';
+	$html = '<div style="' . esc_attr( $styles ) . '">';
+	$html .= '<h2 style="margin:0 0 16px;color:#17406f;">Trivia Nationals 2026 Event Signups</h2>';
+
+	if ( empty( $signups ) ) {
+		$html .= '<p>We did not find any Trivia Nationals 2026 event signups associated with this email address.</p>';
+		$html .= '<p>If you recently submitted a signup, please give it a minute and try again.</p>';
+		$html .= '</div>';
+		return $html;
+	}
+
+	$html .= '<p>Here are the Trivia Nationals 2026 event signups associated with this email address:</p>';
+	$html .= '<ol style="padding-left:22px;">';
+	foreach ( $signups as $signup ) {
+		if ( ! is_array( $signup ) ) continue;
+		$title = isset( $signup['event_title'] ) ? (string) $signup['event_title'] : 'Event signup';
+		$html .= '<li style="margin:0 0 18px;">';
+		$html .= '<strong style="font-size:16px;color:#17406f;">' . esc_html( $title ?: 'Event signup' ) . '</strong>';
+		$html .= '<ul style="margin:8px 0 0;padding-left:18px;">';
+		$html .= tn_tde_signup_summary_email_detail( 'Flight', $signup['flight'] ?? '' );
+		$time = implode( ', ', array_filter( [
+			isset( $signup['event_day'] ) ? (string) $signup['event_day'] : '',
+			isset( $signup['event_date'] ) ? (string) $signup['event_date'] : '',
+			isset( $signup['event_start'] ) ? (string) $signup['event_start'] : '',
+		] ) );
+		$html .= tn_tde_signup_summary_email_detail( 'Time', $time );
+		$html .= tn_tde_signup_summary_email_detail( 'Location', $signup['event_location'] ?? '' );
+		$html .= tn_tde_signup_summary_email_detail( 'Team Name', $signup['team'] ?? '' );
+		$html .= tn_tde_signup_summary_email_detail( 'Team Members', $signup['team_members'] ?? '' );
+		$html .= '</ul></li>';
+	}
+	$html .= '</ol>';
+	$html .= '</div>';
+	return $html;
+}
+
+function tn_tde_signup_summary_email_detail( $label, $value ) {
+	$value = trim( (string) $value );
+	if ( $value === '' ) return '';
+	return '<li><strong>' . esc_html( $label ) . ':</strong> ' . nl2br( esc_html( $value ) ) . '</li>';
+}
+
+function tn_tde_is_event_signups_request() {
+	if ( is_admin() ) return false;
+	$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ), '/' );
+	return strtolower( $path ) === 'event-signups';
+}
+
+add_action( 'wp', function() {
+	if ( ! tn_tde_is_event_signups_request() ) return;
+	global $wp_query;
+	$wp_query->is_404 = false;
+	$wp_query->is_page = true;
+	$wp_query->is_singular = true;
+	status_header( 200 );
+} );
+
+add_filter( 'document_title_parts', function( $parts ) {
+	if ( tn_tde_is_event_signups_request() ) {
+		$parts['title'] = 'Event Signups';
+	}
+	return $parts;
+} );
+
+add_filter( 'body_class', function( $classes ) {
+	if ( ! tn_tde_is_event_signups_request() ) return $classes;
+	$classes = array_diff( $classes, [ 'error404' ] );
+	$classes[] = 'tn-event-signups-page';
+	return array_values( array_unique( $classes ) );
+} );
+
+add_action( 'template_redirect', function() {
+	if ( ! tn_tde_is_event_signups_request() ) return;
+	status_header( 200 );
+	nocache_headers();
+	tn_tde_render_signup_page();
+	exit;
+}, 2 );
+
+function tn_tde_render_signup_page() {
+	$events = tn_tde_signup_events_for_page();
+	$status = isset( $_GET['tn_signup'] ) ? sanitize_key( wp_unslash( $_GET['tn_signup'] ) ) : '';
+	$lookup_status = isset( $_GET['tn_lookup'] ) ? sanitize_key( wp_unslash( $_GET['tn_lookup'] ) ) : '';
+	$count = isset( $_GET['tn_signup_count'] ) ? absint( $_GET['tn_signup_count'] ) : 0;
+	get_header();
+	?>
+	<main class="tn-signup-page">
+		<style>
+			body.tn-event-signups-page .inner-main-title,
+			body.tn-event-signups-page .entry-header,
+			body.tn-event-signups-page .page-header {
+				display: none !important;
+			}
+			body.tn-event-signups-page .site-content,
+			body.tn-event-signups-page .content-area,
+			body.tn-event-signups-page .site-main,
+			body.tn-event-signups-page .entry-content {
+				margin: 0 !important;
+				max-width: none !important;
+				padding: 0 !important;
+				width: 100% !important;
+			}
+			.tn-signup-page {
+				--tn-grid-bg: #0a0a14;
+				--tn-grid-panel: rgba(18,20,34,0.82);
+				--tn-grid-panel-strong: rgba(25,29,48,0.94);
+				--tn-grid-line: rgba(255,255,255,0.16);
+				--tn-grid-text: #f0f0f5;
+				--tn-grid-muted: #b7bdcf;
+				--tn-grid-cyan: #00e6ff;
+				--tn-grid-pink: #ff3ea5;
+				--tn-grid-gold: #ffd166;
+				color: var(--tn-grid-text);
+				background:
+					radial-gradient(circle at 18% 7%, rgba(0,230,255,0.18), transparent 24rem),
+					radial-gradient(circle at 82% 0%, rgba(255,62,165,0.16), transparent 25rem),
+					linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0)),
+					var(--tn-grid-bg);
+				font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				margin-left: calc(50% - 50vw);
+				margin-right: calc(50% - 50vw);
+				max-width: none;
+				min-height: 100vh;
+				padding: clamp(2.5rem, 7vw, 6rem) clamp(1rem, 4vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+				width: 100vw;
+			}
+			.tn-signup-page > * {
+				margin: 0 auto;
+				max-width: 1320px;
+			}
+			.tn-signup-nav {
+				align-items: center;
+				display: flex;
+				gap: 1rem;
+				justify-content: space-between;
+				margin-bottom: clamp(1.4rem, 3vw, 2.6rem);
+			}
+			.tn-signup-brand {
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1rem, 1.5vw, 1.35rem);
+				font-weight: 900;
+				line-height: 1;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav {
+				align-items: center;
+				display: flex;
+				flex-wrap: wrap;
+				gap: clamp(0.75rem, 2vw, 1.5rem);
+				justify-content: flex-end;
+			}
+			.tn-signup-nav nav a {
+				color: var(--tn-grid-muted);
+				font-size: 0.84rem;
+				font-weight: 800;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav a:hover,
+			.tn-signup-nav nav a[aria-current="page"] {
+				color: var(--tn-grid-cyan);
+			}
+			.tn-signup-page-inner {
+				width: min(980px, 100%);
+			}
+			.tn-signup-page h1 {
+				margin: 0 0 0.65rem;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(3.2rem, 7vw, 6.4rem);
+				font-weight: 900;
+				letter-spacing: 0;
+				line-height: 0.9;
+				text-transform: uppercase;
+			}
+			.tn-signup-kicker {
+				color: var(--tn-grid-cyan);
+				font-size: clamp(0.8rem, 1.2vw, 1rem);
+				font-weight: 900;
+				letter-spacing: 0.12em;
+				margin: 0 0 0.55rem;
+				text-transform: uppercase;
+			}
+			.tn-signup-page-intro {
+				max-width: 46rem;
+				margin: 0 0 1rem;
+				color: var(--tn-grid-muted);
+				font-size: 1.05rem;
+				line-height: 1.6;
+			}
+			.tn-signup-note {
+				display: grid;
+				gap: 0.35rem;
+				margin: 0 0 1.2rem;
+				padding: 0.95rem 1rem;
+				border: 1px solid rgba(0,230,255,0.28);
+				border-radius: 8px;
+				background:
+					linear-gradient(135deg, rgba(0,230,255,0.09), rgba(255,62,165,0.045)),
+					rgba(18,20,34,0.78);
+				color: var(--tn-grid-muted);
+				line-height: 1.55;
+			}
+			.tn-signup-note p {
+				margin: 0;
+			}
+			.tn-signup-note strong {
+				color: var(--tn-grid-text);
+			}
+			.tn-signup-page-message {
+				margin: 0 0 1rem;
+				padding: 0.85rem 1rem;
+				border-radius: 8px;
+				background: var(--tn-grid-panel);
+				border: 1px solid var(--tn-grid-line);
+			}
+			.tn-signup-page-message.is-success { color: #35e69f; }
+			.tn-signup-page-message.is-error { color: #ff8a8a; }
+			.tn-signup-page-form {
+				display: grid;
+				gap: 1rem;
+				padding: clamp(1rem, 3vw, 1.5rem);
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 8px;
+				background: var(--tn-grid-panel-strong);
+				box-shadow: 0 24px 80px rgba(0,0,0,0.28);
+			}
+			.tn-signup-lookup {
+				display: grid;
+				gap: 0.9rem;
+				margin-top: 1.25rem;
+				padding: clamp(1rem, 3vw, 1.35rem);
+				border: 1px solid rgba(0,230,255,0.22);
+				border-radius: 8px;
+				background:
+					linear-gradient(135deg, rgba(0,230,255,0.08), rgba(255,62,165,0.04)),
+					rgba(18,20,34,0.82);
+			}
+			.tn-signup-lookup h2 {
+				margin: 0;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1.45rem, 3vw, 2.2rem);
+				font-weight: 900;
+				line-height: 1;
+				text-transform: uppercase;
+			}
+			.tn-signup-lookup p {
+				margin: 0;
+				color: var(--tn-grid-muted);
+				line-height: 1.55;
+			}
+			.tn-signup-lookup-form {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 0.75rem;
+				align-items: end;
+			}
+			.tn-signup-common-fields,
+			.tn-signup-event-row-fields {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 0.8rem;
+			}
+			.tn-signup-event-row {
+				display: grid;
+				gap: 0.85rem;
+				padding: 1rem;
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 8px;
+				background: rgba(7,8,18,0.42);
+			}
+			.tn-signup-event-row-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 1rem;
+			}
+			.tn-signup-event-row-title {
+				margin: 0;
+				color: var(--tn-grid-cyan);
+				font-family: Outfit, Inter, sans-serif;
+				font-weight: 900;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+			}
+			.tn-signup-page label {
+				display: block;
+				margin-bottom: 0.25rem;
+				color: var(--tn-grid-muted);
+				font-weight: 800;
+			}
+			.tn-signup-page input,
+			.tn-signup-page select,
+			.tn-signup-page textarea {
+				width: 100%;
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 8px;
+				background: rgba(7,8,18,0.72);
+				color: var(--tn-grid-text);
+				padding: 0.72rem 0.85rem;
+			}
+			.tn-signup-page input:focus,
+			.tn-signup-page select:focus,
+			.tn-signup-page textarea:focus {
+				border-color: rgba(0,230,255,0.72);
+				box-shadow: 0 0 0 3px rgba(0,230,255,0.12);
+				outline: none;
+			}
+			.tn-signup-page .is-full { grid-column: 1 / -1; }
+			.tn-signup-team-fields {
+				display: grid;
+				gap: 0.8rem;
+			}
+			.tn-signup-page [hidden] {
+				display: none !important;
+			}
+			.tn-signup-page button {
+				border: 0;
+				border-radius: 999px;
+				cursor: pointer;
+				font-family: Outfit, Inter, sans-serif;
+				font-weight: 900;
+				letter-spacing: 0.08em;
+				padding: 0.78rem 1.1rem;
+				text-transform: uppercase;
+			}
+			.tn-signup-add,
+			.tn-signup-submit {
+				background: var(--tn-grid-gold);
+				color: #071019;
+			}
+			.tn-signup-remove {
+				background: rgba(255,255,255,0.1);
+				color: var(--tn-grid-text);
+			}
+			.tn-signup-actions {
+				display: flex;
+				gap: 0.75rem;
+				flex-wrap: wrap;
+			}
+			.tn-signup-trap {
+				position: absolute;
+				left: -9999px;
+			}
+			@media (max-width: 820px) {
+				.tn-signup-page {
+					padding: 1rem;
+				}
+				.tn-signup-nav {
+					align-items: flex-start;
+					flex-direction: column;
+				}
+				.tn-signup-nav nav {
+					justify-content: flex-start;
+				}
+				.tn-signup-page h1 {
+					font-size: clamp(2.65rem, 12.5vw, 3.6rem);
+					max-width: 8.5ch;
+				}
+			}
+			@media (max-width: 720px) {
+				.tn-signup-common-fields,
+				.tn-signup-event-row-fields,
+				.tn-signup-lookup-form {
+					grid-template-columns: 1fr;
+				}
+				.tn-signup-actions button,
+				.tn-signup-lookup-form button {
+					width: 100%;
+				}
+			}
+		</style>
+		<div class="tn-signup-nav">
+			<a class="tn-signup-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>">Trivia Nationals 2026</a>
+			<nav aria-label="Signup page navigation">
+				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">Home</a>
+				<a href="<?php echo esc_url( home_url( '/#schedule' ) ); ?>">Schedule</a>
+				<a href="<?php echo esc_url( home_url( '/full-schedule/' ) ); ?>">Full Schedule</a>
+				<a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>" aria-current="page">Signups</a>
+			</nav>
+		</div>
+		<div class="tn-signup-page-inner">
+			<p class="tn-signup-kicker">August 7 - 9, 2026 / Las Vegas</p>
+			<h1>Event Signups</h1>
+			<p class="tn-signup-page-intro">Choose one or more events, fill in the event-specific details, and submit everything together.</p>
+			<div class="tn-signup-note" role="note">
+				<p><strong>Important:</strong> You must be registered for Trivia Nationals 2026 before signing up for events.</p>
+				<p>You may sign up for only one flight per event.</p>
+				<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
+			</div>
+			<?php if ( $status === 'success' ) : ?>
+				<p class="tn-signup-page-message is-success"><?php echo esc_html( $count > 1 ? 'Thanks! ' . $count . ' signups were received.' : 'Thanks! Your signup was received.' ); ?></p>
+			<?php elseif ( in_array( $status, [ 'invalid', 'closed', 'missing', 'spam', 'error' ], true ) ) : ?>
+				<p class="tn-signup-page-message is-error">Sorry, that signup could not be saved. Please check the required fields and try again.</p>
+			<?php endif; ?>
+			<form class="tn-signup-page-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-tn-signup-page-form>
+				<input type="hidden" name="action" value="tn_tde_bulk_event_signup">
+				<input type="hidden" name="tn_signup_redirect" value="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">
+				<?php wp_nonce_field( 'tn_tde_bulk_event_signup', 'tn_tde_bulk_event_signup_nonce' ); ?>
+				<div class="tn-signup-common-fields">
+					<p>
+						<label for="tn_signup_page_name">Name *</label>
+						<input type="text" id="tn_signup_page_name" name="tn_signup_name" required autocomplete="name">
+					</p>
+					<p>
+						<label for="tn_signup_page_email">Contact Email *</label>
+						<input type="email" id="tn_signup_page_email" name="tn_signup_email" required autocomplete="email">
+					</p>
+				</div>
+				<div data-tn-signup-events></div>
+				<p class="tn-signup-trap" aria-hidden="true">
+					<label for="tn_signup_page_referrer_check">Leave this field blank</label>
+					<input type="text" id="tn_signup_page_referrer_check" name="tn_signup_referrer_check" tabindex="-1" autocomplete="new-password">
+				</p>
+				<div class="tn-signup-actions">
+					<button type="button" class="tn-signup-add" data-tn-add-event>Add Another Event</button>
+					<button type="submit" class="tn-signup-submit">Submit Signups</button>
+				</div>
+			</form>
+			<section class="tn-signup-lookup" aria-labelledby="tn-signup-lookup-title">
+				<h2 id="tn-signup-lookup-title">Check Your Event Signups</h2>
+				<p>Enter the contact email you used for event signups and we’ll email a summary of anything currently associated with that address.</p>
+				<?php if ( $lookup_status === 'sent' ) : ?>
+					<p class="tn-signup-page-message is-success">Thanks! Check that inbox for your signup summary.</p>
+				<?php elseif ( in_array( $lookup_status, [ 'invalid', 'error' ], true ) ) : ?>
+					<p class="tn-signup-page-message is-error">Sorry, we could not send that summary. Please check the email address and try again.</p>
+				<?php endif; ?>
+				<form class="tn-signup-lookup-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="tn_tde_email_signup_summary">
+					<input type="hidden" name="tn_signup_redirect" value="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">
+					<?php wp_nonce_field( 'tn_tde_email_signup_summary', 'tn_tde_email_signup_summary_nonce' ); ?>
+					<p>
+						<label for="tn_signup_lookup_email">Contact Email</label>
+						<input type="email" id="tn_signup_lookup_email" name="tn_signup_lookup_email" required autocomplete="email">
+					</p>
+					<p class="tn-signup-trap" aria-hidden="true">
+						<label for="tn_signup_lookup_company">Leave this field blank</label>
+						<input type="text" id="tn_signup_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
+					</p>
+					<button type="submit" class="tn-signup-submit">Email My Signups</button>
+				</form>
+			</section>
+		</div>
+		<script>
+		(function(){
+			var events = <?php echo wp_json_encode( $events ); ?>;
+			var list = document.querySelector('[data-tn-signup-events]');
+			var addButton = document.querySelector('[data-tn-add-event]');
+			var rowCount = 0;
+			function option(text, value) {
+				var el = document.createElement('option');
+				el.textContent = text;
+				el.value = value || '';
+				return el;
+			}
+			function eventBySlug(slug) {
+				return events.find(function(event) { return event.slug === slug; }) || null;
+			}
+			function refreshRow(row) {
+				var select = row.querySelector('[data-tn-event-select]');
+				var flightWrap = row.querySelector('[data-tn-flight-wrap]');
+				var flightSelect = row.querySelector('[data-tn-flight-select]');
+				var teamWrap = row.querySelector('[data-tn-team-wrap]');
+				var event = eventBySlug(select.value);
+				flightSelect.innerHTML = '';
+				flightSelect.appendChild(option('Select a flight', ''));
+				if (event && event.flights && event.flights.length) {
+					event.flights.forEach(function(flight) {
+						flightSelect.appendChild(option(flight.label, flight.value));
+					});
+					flightSelect.required = true;
+					flightWrap.hidden = false;
+				} else {
+					flightSelect.required = false;
+					flightWrap.hidden = true;
+				}
+				teamWrap.hidden = !(event && event.isTeam);
+			}
+			function renumberRows() {
+				list.querySelectorAll('[data-tn-signup-row]').forEach(function(row, index) {
+					var title = row.querySelector('[data-tn-row-title]');
+					var remove = row.querySelector('[data-tn-remove-event]');
+					if (title) title.textContent = 'Event ' + (index + 1);
+					if (remove) remove.hidden = index === 0 && list.querySelectorAll('[data-tn-signup-row]').length === 1;
+				});
+			}
+			function addRow() {
+				var index = rowCount++;
+				var row = document.createElement('section');
+				row.className = 'tn-signup-event-row';
+				row.setAttribute('data-tn-signup-row', '');
+				row.innerHTML =
+					'<div class="tn-signup-event-row-head">' +
+						'<p class="tn-signup-event-row-title" data-tn-row-title>Event</p>' +
+						'<button type="button" class="tn-signup-remove" data-tn-remove-event>Remove</button>' +
+					'</div>' +
+					'<div class="tn-signup-event-row-fields">' +
+						'<p class="is-full"><label>Event *</label><select name="tn_signup_events[' + index + '][event_slug]" required data-tn-event-select></select></p>' +
+						'<p class="is-full" data-tn-flight-wrap hidden><label>Flight *</label><select name="tn_signup_events[' + index + '][flight]" data-tn-flight-select></select></p>' +
+						'<div class="is-full tn-signup-team-fields" data-tn-team-wrap hidden>' +
+							'<p><label>Team Name</label><input type="text" name="tn_signup_events[' + index + '][team]" autocomplete="organization"></p>' +
+							'<p><label>Team Members</label><textarea name="tn_signup_events[' + index + '][team_members]" rows="3" placeholder="One person can register the whole team. List teammates here if you have them."></textarea></p>' +
+						'</div>' +
+						'<p class="is-full"><label>Notes</label><textarea name="tn_signup_events[' + index + '][notes]" rows="3"></textarea></p>' +
+					'</div>';
+				var eventSelect = row.querySelector('[data-tn-event-select]');
+				eventSelect.appendChild(option('Select an event', ''));
+				events.forEach(function(event) {
+					eventSelect.appendChild(option(event.title, event.slug));
+				});
+				eventSelect.addEventListener('change', function() { refreshRow(row); });
+				row.querySelector('[data-tn-remove-event]').addEventListener('click', function() {
+					row.remove();
+					if (!list.querySelector('[data-tn-signup-row]')) addRow();
+					renumberRows();
+				});
+				list.appendChild(row);
+				refreshRow(row);
+				renumberRows();
+			}
+			if (addButton) addButton.addEventListener('click', addRow);
+			addRow();
+		})();
+		</script>
+	</main>
+	<?php
+	get_footer();
+}
+
+function tn_tde_queue_event_signup_sync( $signup_id ) {
+	if ( function_exists( 'as_enqueue_async_action' ) ) {
+		as_enqueue_async_action( 'tn_tde_sync_event_signup', [ $signup_id ], 'tn-event-signups', true );
+		return;
+	}
+	if ( ! wp_next_scheduled( 'tn_tde_sync_event_signup', [ $signup_id ] ) ) {
+		wp_schedule_single_event( time() + 5, 'tn_tde_sync_event_signup', [ $signup_id ] );
+	}
+}
+
+function tn_tde_sync_event_signup( $signup_id, $timeout = 20 ) {
+	$endpoint = trim( (string) get_option( 'tn_tde_signup_sheets_endpoint' ) );
+	$secret = trim( (string) get_option( 'tn_tde_signup_sheets_secret' ) );
+	$signup = get_post( absint( $signup_id ) );
+	if ( ! $signup || $signup->post_type !== 'tn_tde_signup' ) return false;
+	if ( ! $endpoint || ! $secret ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'failed' );
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_error', 'Missing Google Sheets endpoint or secret.' );
+		return false;
+	}
+	$fields = [ 'event_slug', 'event_title', 'event_session', 'event_day', 'event_date', 'event_start', 'event_end', 'event_location', 'name', 'email', 'flight', 'team', 'team_members', 'notes', 'status', 'status_changed_at', 'status_reason' ];
+	$row = [
+		'signup_id' => (string) $signup->ID,
+		'submitted_at' => get_post_time( 'Y-m-d H:i:s', false, $signup ),
+	];
+	foreach ( $fields as $field ) {
+		$row[ $field ] = (string) get_post_meta( $signup->ID, '_tn_tde_signup_' . $field, true );
+	}
+	if ( $row['status'] === '' ) $row['status'] = 'active';
+	$response = wp_remote_post( $endpoint, [
+		'timeout' => max( 1, absint( $timeout ) ),
+		'redirection' => 0,
+		'headers' => [ 'Content-Type' => 'application/json; charset=utf-8' ],
+		'body' => wp_json_encode( [ 'secret' => $secret, 'action' => 'event_signup_upsert', 'signup' => $row ] ),
+	] );
+	if ( is_wp_error( $response ) ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'failed' );
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_error', sanitize_text_field( $response->get_error_message() ) );
+		return false;
+	}
+	$code = wp_remote_retrieve_response_code( $response );
+	if ( $code >= 300 && $code < 400 && wp_remote_retrieve_header( $response, 'location' ) ) {
+		$response = wp_remote_get( wp_remote_retrieve_header( $response, 'location' ), [ 'timeout' => max( 1, absint( $timeout ) ), 'redirection' => 5 ] );
+		$code = is_wp_error( $response ) ? 500 : wp_remote_retrieve_response_code( $response );
+	}
+	$body = is_wp_error( $response ) ? $response->get_error_message() : wp_remote_retrieve_body( $response );
+	$result = json_decode( $body, true );
+	if ( $code < 200 || $code >= 300 || ! is_array( $result ) || empty( $result['ok'] ) ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'failed' );
+		update_post_meta( $signup_id, '_tn_tde_signup_sync_error', sanitize_text_field( 'HTTP ' . $code . ': ' . $body ) );
+		return false;
+	}
+	update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'synced' );
+	delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+	return true;
 }
 
 function tn_tde_home_event_types() {
@@ -3518,6 +5338,80 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 				font-size: 1rem;
 				line-height: 1.7;
 			}
+			.tn-dynamic-event-signup {
+				margin-top: 1rem;
+				border: 1px solid var(--tn-line);
+				border-radius: 8px;
+				background: rgba(17,21,37,0.78);
+				box-shadow: 0 24px 80px rgba(0,0,0,0.28);
+				padding: clamp(1.2rem, 2.4vw, 1.85rem);
+			}
+			.tn-dynamic-event-signup h2 {
+				margin: 0 0 0.75rem;
+				color: var(--event-accent);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1.6rem, 3vw, 2.5rem);
+				font-weight: 900;
+				line-height: 0.95;
+				text-transform: uppercase;
+			}
+			.tn-signup-note {
+				display: grid;
+				gap: 0.35rem;
+				margin: 0 0 1.2rem;
+				padding: 0.95rem 1rem;
+				border: 1px solid rgba(0,230,255,0.28);
+				border-radius: 8px;
+				background:
+					linear-gradient(135deg, rgba(0,230,255,0.09), rgba(255,62,165,0.045)),
+					rgba(17,21,37,0.78);
+				color: var(--tn-muted);
+				line-height: 1.55;
+			}
+			.tn-signup-note p { margin: 0; }
+			.tn-signup-note strong { color: var(--tn-text); }
+			.tn-dynamic-event-signup-message { margin: 0 0 0.85rem; }
+			.tn-dynamic-event-signup-message.is-success { color: #35e69f; }
+			.tn-dynamic-event-signup-message.is-error { color: #ff8a8a; }
+			.tn-dynamic-event-signup-form {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 0.8rem;
+			}
+			.tn-dynamic-event-signup-form p { margin: 0; }
+			.tn-dynamic-event-signup-form .is-full { grid-column: 1 / -1; }
+			.tn-dynamic-event-signup-form label {
+				display: block;
+				margin-bottom: 0.25rem;
+				color: var(--tn-muted);
+				font-weight: 800;
+			}
+			.tn-dynamic-event-signup-form input,
+			.tn-dynamic-event-signup-form select,
+			.tn-dynamic-event-signup-form textarea {
+				width: 100%;
+				border: 1px solid rgba(255,255,255,0.14);
+				border-radius: 8px;
+				background: rgba(7,8,18,0.72);
+				color: var(--tn-text);
+				padding: 0.72rem 0.85rem;
+			}
+			.tn-dynamic-event-signup-form button {
+				border: 0;
+				border-radius: 999px;
+				background: var(--tn-gold);
+				color: #071019;
+				cursor: pointer;
+				font-family: Outfit, Inter, sans-serif;
+				font-weight: 900;
+				letter-spacing: 0.08em;
+				padding: 0.78rem 1.1rem;
+				text-transform: uppercase;
+			}
+			.tn-signup-trap {
+				position: absolute;
+				left: -9999px;
+			}
 			.tn-dynamic-presenter-list {
 				display: grid;
 				gap: 0.85rem;
@@ -3546,7 +5440,8 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 				font-weight: 900;
 				overflow-wrap: anywhere;
 			}
-			.tn-dynamic-presenter-list span {
+			.tn-dynamic-presenter-body,
+			.tn-dynamic-presenter-bio {
 				display: block;
 				margin-top: 0.1rem;
 				color: var(--tn-muted);
@@ -3556,6 +5451,14 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 				overflow-wrap: anywhere;
 				white-space: normal;
 			}
+			.tn-dynamic-presenter-bio p {
+				margin: 0.25rem 0 0;
+			}
+			.tn-dynamic-presenter-bio ul,
+			.tn-dynamic-presenter-bio ol {
+				margin: 0.35rem 0 0 1.1rem;
+				padding: 0;
+			}
 			@media (max-width: 800px) {
 				.tn-dynamic-event-detail.admin-bar { padding-top: 46px; }
 				.admin-bar .tn-dynamic-event-nav { top: 0; }
@@ -3563,6 +5466,7 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 				.tn-dynamic-event-links { justify-content: flex-start; }
 				.tn-dynamic-event-hero,
 				.tn-dynamic-event-main { grid-template-columns: 1fr; }
+				.tn-dynamic-event-signup-form { grid-template-columns: 1fr; }
 				.tn-dynamic-event-hero { min-height: auto; padding-top: 2rem; }
 				.tn-dynamic-event-title { font-size: clamp(3rem, 15vw, 5.8rem); }
 			}
@@ -3607,6 +5511,7 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 			<article class="tn-dynamic-event-content">
 				<h2>About This Event</h2>
 				<?php echo wpautop( $description ); ?>
+				<?php echo tn_tde_render_event_signup_form( $event ); ?>
 			</article>
 			<aside class="tn-dynamic-event-card">
 				<h2>Presented By</h2>
@@ -3619,12 +5524,12 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 								<?php else : ?>
 									<span aria-hidden="true"></span>
 								<?php endif; ?>
-								<span>
+								<div class="tn-dynamic-presenter-body">
 									<strong><?php echo esc_html( $presenter['name'] ?: 'Presenter TBA' ); ?></strong>
 									<?php if ( ! empty( $presenter['bio'] ) ) : ?>
-										<span><?php echo esc_html( trim( wp_strip_all_tags( $presenter['bio'] ) ) ); ?></span>
+										<div class="tn-dynamic-presenter-bio"><?php echo wpautop( wp_kses_post( $presenter['bio'] ) ); ?></div>
 									<?php endif; ?>
-								</span>
+								</div>
 							</li>
 						<?php endforeach; ?>
 					</ul>
@@ -4127,6 +6032,11 @@ function tn_tde_render_full_schedule_shortcode() {
 			</section>
 		<?php $panel_index++; endforeach; ?>
 
+		<div class="tn-full-schedule-signup-cta">
+			<p class="tn-full-schedule-signup-kicker">Ready to choose your events?</p>
+			<a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Sign Up for Events</a>
+		</div>
+
 		<div class="tn-full-schedule-modal" aria-hidden="true">
 			<div class="tn-full-schedule-backdrop" data-tn-schedule-close></div>
 			<article class="tn-full-schedule-dialog" role="dialog" aria-modal="true" aria-labelledby="tn-full-schedule-modal-title">
@@ -4229,6 +6139,53 @@ function tn_tde_render_full_schedule_shortcode() {
 	}
 	.tn-full-schedule-nav nav a:hover {
 		color: var(--tn-grid-cyan);
+	}
+	.tn-full-schedule-signup-cta {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+		width: min(680px, 100%);
+		margin: clamp(1rem, 2.4vw, 1.5rem) auto 0;
+		padding: clamp(1rem, 2.4vw, 1.3rem);
+		border: 1px solid rgba(0,229,255,0.22);
+		border-radius: 8px;
+		background:
+			linear-gradient(135deg, rgba(0,229,255,0.1), rgba(255,45,149,0.06)),
+			rgba(17,21,37,0.74);
+	}
+	.tn-full-schedule-signup-cta p {
+		margin: 0;
+		color: var(--tn-grid-muted);
+		line-height: 1.5;
+		text-align: center;
+	}
+	.tn-full-schedule-signup-cta .tn-full-schedule-signup-kicker {
+		margin-bottom: 0.2rem;
+		color: var(--tn-grid-text);
+		font-family: Outfit, Inter, sans-serif;
+		font-size: 1rem;
+		font-weight: 900;
+		letter-spacing: 0;
+		text-transform: uppercase;
+	}
+	.tn-full-schedule-signup-cta a {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 44px;
+		padding: 0.72rem 1.05rem;
+		border: 1px solid rgba(255,209,102,0.85);
+		border-radius: 999px;
+		background: #ffd166;
+		color: #071019;
+		font-family: Outfit, Inter, sans-serif;
+		font-size: 0.82rem;
+		font-weight: 900;
+		letter-spacing: 0.08em;
+		text-decoration: none;
+		text-transform: uppercase;
 	}
 	.tn-full-schedule-head {
 		display: grid;
@@ -4546,6 +6503,13 @@ function tn_tde_render_full_schedule_shortcode() {
 		.tn-full-schedule-nav nav {
 			justify-content: flex-start;
 		}
+		.tn-full-schedule-signup-cta {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.tn-full-schedule-signup-cta a {
+			width: 100%;
+		}
 		.tn-full-schedule-head { padding-top: 1.25rem; }
 		.tn-full-schedule-head h2 {
 			font-size: clamp(2.65rem, 12.5vw, 3.6rem);
@@ -4710,9 +6674,7 @@ add_action( 'wp_footer', function () {
 				var html = document.documentElement;
 				var scrollPad = parseInt(getComputedStyle(html).scrollPaddingTop) || 72;
 				var dest = Math.round(target.getBoundingClientRect().top + window.scrollY - scrollPad);
-				html.style.scrollBehavior = 'auto';
-				html.scrollTop = dest;
-				setTimeout(function() { html.style.scrollBehavior = ''; }, 50);
+				window.scrollTo({ top: dest, behavior: 'smooth' });
 				history.pushState(null, '', hash);
 			} catch(e) {}
 		}
@@ -4731,6 +6693,7 @@ add_action( 'wp_footer', function () {
 			var href = a.getAttribute('href');
 			if (!href || href === '#') return;
 			e.preventDefault();
+			e.stopImmediatePropagation();
 			tnScrollTo(href);
 		}, true);
 	})();
@@ -4834,7 +6797,50 @@ add_action( 'admin_menu', function () {
 		'tn-venue-videos',
 		'tn_tde_venue_videos_page'
 	);
+	add_submenu_page(
+		'trivia-desc-editor',
+		'Signup Settings',
+		'Signup Settings',
+		'manage_options',
+		'tn-signup-settings',
+		'tn_tde_signup_settings_page'
+	);
 } );
+
+add_action( 'admin_init', function() {
+	register_setting( 'tn_tde_signup_settings', 'tn_tde_signup_sheets_endpoint', [
+		'type' => 'string',
+		'sanitize_callback' => 'esc_url_raw',
+	] );
+	register_setting( 'tn_tde_signup_settings', 'tn_tde_signup_sheets_secret', [
+		'type' => 'string',
+		'sanitize_callback' => 'sanitize_text_field',
+	] );
+} );
+
+function tn_tde_signup_settings_page() {
+	if ( ! current_user_can( 'manage_options' ) ) return;
+	?>
+	<div class="wrap">
+		<h1>Event Signup Settings</h1>
+		<p>Paste the Google Apps Script web app URL and shared secret used to append event signup rows to Google Sheets.</p>
+		<form method="post" action="options.php">
+			<?php settings_fields( 'tn_tde_signup_settings' ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="tn_tde_signup_sheets_endpoint">Apps Script web app URL</label></th>
+					<td><input class="regular-text code" type="url" id="tn_tde_signup_sheets_endpoint" name="tn_tde_signup_sheets_endpoint" value="<?php echo esc_attr( get_option( 'tn_tde_signup_sheets_endpoint' ) ); ?>"></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="tn_tde_signup_sheets_secret">Shared secret</label></th>
+					<td><input class="regular-text code" type="password" id="tn_tde_signup_sheets_secret" name="tn_tde_signup_sheets_secret" value="<?php echo esc_attr( get_option( 'tn_tde_signup_sheets_secret' ) ); ?>" autocomplete="new-password"></td>
+				</tr>
+			</table>
+			<?php submit_button(); ?>
+		</form>
+	</div>
+	<?php
+}
 
 function tn_tde_admin_list_styles() {
 	?>
@@ -5593,16 +7599,22 @@ function trivia_desc_editor_page() {
     padding: 0.3rem 0.55rem;
   }
   .tde-rich-toolbar button:hover { background: #f0f2f5; }
-  .tde-rich-desc {
+  .tde-rich-desc,
+  .tde-rich-bio {
     width: 100%; border: 1px solid #d0d7de; border-radius: 6px;
     padding: 0.55rem 0.7rem; font-size: 0.83rem; line-height: 1.5;
     min-height: 110px; font-family: inherit; background: #fff;
     color: #222; transition: border-color 0.2s;
   }
-  .tde-rich-desc:focus {
+  .tde-rich-bio {
+    min-height: 72px;
+  }
+  .tde-rich-desc:focus,
+  .tde-rich-bio:focus {
     outline: none; border-color: #0096a0; box-shadow: 0 0 0 3px rgba(0,150,160,0.12);
   }
-  .tde-rich-desc img {
+  .tde-rich-desc img,
+  .tde-rich-bio img {
     display: block; max-width: 100%; height: auto; margin: 0.5rem 0; border-radius: 6px;
   }
   .tde-card .tde-info-url {
@@ -5686,10 +7698,8 @@ function trivia_desc_editor_page() {
     grid-column: 1 / -1;
     min-width: 0;
   }
-  .tde-presenter-row textarea {
-    width: 100%;
-    box-sizing: border-box;
-    min-height: 58px;
+  .tde-presenter-bio-field .tde-rich-toolbar {
+    margin-top: 0.25rem;
   }
   .tde-sessions {
     margin-top: 0.65rem; border: 1px solid #d8dee4; border-radius: 6px;
@@ -5747,6 +7757,7 @@ function trivia_desc_editor_page() {
   .tde-presenter-photo-btn:hover { background: #f0f2f5; }
   .tde-card.changed textarea,
   .tde-card.changed .tde-rich-desc,
+  .tde-card.changed .tde-rich-bio,
   .tde-card.changed input,
   .tde-card.changed select { border-color: #e6a800; }
   .tde-char-count { font-size: 0.7rem; color: #999; text-align: right; margin-top: 0.2rem; }
@@ -5899,7 +7910,7 @@ function trivia_desc_editor_page() {
     return el.textContent || '';
   }
   function sanitizeDescriptionHtml(html) {
-    var allowed = { A: true, STRONG: true, B: true, EM: true, I: true, U: true, BR: true, P: true, UL: true, OL: true, LI: true, IMG: true };
+    var allowed = { A: true, STRONG: true, B: true, EM: true, I: true, U: true, BR: true, P: true, DIV: true, UL: true, OL: true, LI: true, IMG: true };
     var template = document.createElement('template');
     template.innerHTML = html || '';
     function clean(node) {
@@ -6337,7 +8348,13 @@ function trivia_desc_editor_page() {
     out += '<button type="button" class="tde-presenter-remove" onclick="tdeRemovePresenter(this)">Remove</button>';
     out += '<div class="tde-presenter-bio-field">';
     out += '<label for="' + baseId + '-bio">Bio</label>';
-    out += '<textarea id="' + baseId + '-bio" data-key="' + escHtml(key) + '" data-presenter-field="bio" rows="2" oninput="tdePresenterChange(this)">' + escHtml(presenter.bio || '') + '</textarea>';
+    out += '<div class="tde-rich-toolbar" data-key="' + escHtml(key) + '">';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'bold\')" title="Bold"><strong>B</strong></button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'italic\')" title="Italic"><em>I</em></button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'insertUnorderedList\')" title="Bulleted list">• List</button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichLink(this)" title="Add link">Link</button>';
+    out += '</div>';
+    out += '<div id="' + baseId + '-bio" class="tde-rich-bio" data-key="' + escHtml(key) + '" data-presenter-field="bio" contenteditable="true" oninput="tdeRichChange(this)">' + normalizeDescriptionHtml(presenter.bio || '') + '</div>';
     out += '</div>';
     out += '</div>';
     return out;
@@ -6510,11 +8527,11 @@ function trivia_desc_editor_page() {
     out += '</div>';
 
     out += '<div class="tde-rich-toolbar" data-key="' + escHtml(key) + '">';
-    out += '<button type="button" onclick="tdeRichCommand(this, \'bold\')" title="Bold"><strong>B</strong></button>';
-    out += '<button type="button" onclick="tdeRichCommand(this, \'italic\')" title="Italic"><em>I</em></button>';
-    out += '<button type="button" onclick="tdeRichCommand(this, \'insertUnorderedList\')" title="Bulleted list">• List</button>';
-    out += '<button type="button" onclick="tdeRichLink(this)" title="Add link">Link</button>';
-    out += '<button type="button" onclick="tdeRichImage(this)" title="Insert image">Image</button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'bold\')" title="Bold"><strong>B</strong></button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'italic\')" title="Italic"><em>I</em></button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichCommand(this, \'insertUnorderedList\')" title="Bulleted list">• List</button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichLink(this)" title="Add link">Link</button>';
+    out += '<button type="button" onmousedown="event.preventDefault()" onclick="tdeRichImage(this)" title="Insert image">Image</button>';
     out += '</div>';
     out += '<div id="ta-' + sid + '" class="tde-rich-desc" data-key="' + escHtml(key) + '" data-field="desc" contenteditable="true" oninput="tdeRichChange(this)">' + desc + '</div>';
     out += '<div class="tde-char-count" id="cc-' + sid + '">' + stripTags(desc).length + ' chars</div>';
@@ -6896,6 +8913,8 @@ function trivia_desc_editor_page() {
   };
 
   function richEditorForButton(btn) {
+    var bioField = btn && btn.closest('.tde-presenter-bio-field');
+    if (bioField) return bioField.querySelector('.tde-rich-bio');
     var card = btn && btn.closest('.tde-card');
     return card ? card.querySelector('.tde-rich-desc') : null;
   }
@@ -7093,7 +9112,7 @@ function trivia_desc_editor_page() {
       var photoEl = row.querySelector('[data-presenter-field="photo"]');
       return {
         name: nameEl ? nameEl.value : '',
-        bio: bioEl ? bioEl.value : '',
+        bio: bioEl ? normalizeDescriptionHtml(bioEl.innerHTML) : '',
         photo: photoEl ? photoEl.value : ''
       };
     }));
