@@ -4009,10 +4009,11 @@ function tn_tde_handle_email_signup_summary() {
 		wp_safe_redirect( add_query_arg( 'tn_lookup', 'invalid', $redirect ) );
 		exit;
 	}
+	$manage_token = tn_tde_issue_manage_signups_token( $email );
 	$sent = wp_mail(
 		$email,
 		'Your Trivia Nationals 2026 event signups',
-		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ) ),
+		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ), $manage_token ? tn_tde_manage_signups_url( $manage_token ) : '' ),
 		[
 			'From: Trivia Nationals <info@trivianationals.org>',
 			'Reply-To: Trivia Nationals <info@trivianationals.org>',
@@ -4081,7 +4082,7 @@ function tn_tde_signup_summary_rows_for_email( $email ) {
 	}, $ids );
 }
 
-function tn_tde_signup_summary_email_html( $signups ) {
+function tn_tde_signup_summary_email_html( $signups, $manage_url = '' ) {
 	$styles = 'font-family:Arial,sans-serif;color:#222;line-height:1.5;';
 	$html = '<div style="' . esc_attr( $styles ) . '">';
 	$html .= '<h2 style="margin:0 0 16px;color:#17406f;">Trivia Nationals 2026 Event Signups</h2>';
@@ -4114,6 +4115,10 @@ function tn_tde_signup_summary_email_html( $signups ) {
 		$html .= '</ul></li>';
 	}
 	$html .= '</ol>';
+	if ( $manage_url ) {
+		$html .= '<p style="margin:20px 0 6px;"><a href="' . esc_url( $manage_url ) . '" style="display:inline-block;padding:10px 18px;background:#17406f;color:#ffffff;border-radius:999px;text-decoration:none;font-weight:bold;">Manage Your Signups</a></p>';
+		$html .= '<p style="color:#666;font-size:13px;margin:0;">Use this link to change flights or cancel a signup. It works for 72 hours and is unique to you &mdash; please do not forward it.</p>';
+	}
 	$html .= '</div>';
 	return $html;
 }
@@ -4122,6 +4127,641 @@ function tn_tde_signup_summary_email_detail( $label, $value ) {
 	$value = trim( (string) $value );
 	if ( $value === '' ) return '';
 	return '<li><strong>' . esc_html( $label ) . ':</strong> ' . nl2br( esc_html( $value ) ) . '</li>';
+}
+
+// ─── Attendee self-service: manage signups via emailed magic link ───────────
+
+function tn_tde_issue_manage_signups_token( $email ) {
+	$email = sanitize_email( $email );
+	if ( ! is_email( $email ) ) return '';
+	$token = wp_generate_password( 32, false, false );
+	set_transient( 'tn_tde_manage_' . $token, $email, 3 * DAY_IN_SECONDS );
+	return $token;
+}
+
+function tn_tde_manage_signups_email_for_token( $token ) {
+	$token = preg_replace( '/[^a-zA-Z0-9]/', '', (string) $token );
+	if ( strlen( $token ) !== 32 ) return '';
+	$email = get_transient( 'tn_tde_manage_' . $token );
+	return is_string( $email ) && is_email( $email ) ? $email : '';
+}
+
+function tn_tde_manage_signups_url( $token ) {
+	return add_query_arg( 'tn_token', rawurlencode( $token ), home_url( '/manage-signups/' ) );
+}
+
+function tn_tde_active_signup_ids_for_email( $email ) {
+	return get_posts( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'orderby' => 'date',
+		'order' => 'ASC',
+		'no_found_rows' => true,
+		'meta_query' => [
+			'relation' => 'AND',
+			[
+				'key' => '_tn_tde_signup_email',
+				'value' => sanitize_email( $email ),
+				'compare' => '=',
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key' => '_tn_tde_signup_status',
+					'value' => 'active',
+					'compare' => '=',
+				],
+				[
+					'key' => '_tn_tde_signup_status',
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		],
+	] );
+}
+
+function tn_tde_is_manage_signups_request() {
+	if ( is_admin() ) return false;
+	$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ), '/' );
+	return strtolower( $path ) === 'manage-signups';
+}
+
+add_action( 'wp', function() {
+	if ( ! tn_tde_is_manage_signups_request() ) return;
+	global $wp_query;
+	$wp_query->is_404 = false;
+	$wp_query->is_page = true;
+	$wp_query->is_singular = true;
+	status_header( 200 );
+} );
+
+add_filter( 'document_title_parts', function( $parts ) {
+	if ( tn_tde_is_manage_signups_request() ) {
+		$parts['title'] = 'Manage Signups';
+	}
+	return $parts;
+} );
+
+add_filter( 'body_class', function( $classes ) {
+	if ( ! tn_tde_is_manage_signups_request() ) return $classes;
+	$classes = array_diff( $classes, [ 'error404' ] );
+	$classes[] = 'tn-event-signups-page';
+	$classes[] = 'tn-manage-signups-page';
+	return array_values( array_unique( $classes ) );
+} );
+
+add_action( 'template_redirect', function() {
+	if ( ! tn_tde_is_manage_signups_request() ) return;
+	status_header( 200 );
+	nocache_headers();
+	tn_tde_render_manage_signups_page();
+	exit;
+}, 2 );
+
+function tn_tde_manage_signup_card_meta( $signup_id ) {
+	$fields = [ 'event_slug', 'event_title', 'event_session', 'event_day', 'event_date', 'event_start', 'event_end', 'event_location', 'name', 'email', 'flight', 'team', 'team_members', 'notes' ];
+	$meta = [];
+	foreach ( $fields as $field ) {
+		$meta[ $field ] = tn_tde_signup_meta_value( $signup_id, $field );
+	}
+	return $meta;
+}
+
+function tn_tde_render_manage_signups_page() {
+	$token = isset( $_GET['tn_token'] ) ? sanitize_text_field( wp_unslash( $_GET['tn_token'] ) ) : '';
+	$email = $token ? tn_tde_manage_signups_email_for_token( $token ) : '';
+	$status = isset( $_GET['tn_manage'] ) ? sanitize_key( wp_unslash( $_GET['tn_manage'] ) ) : '';
+	$lookup_status = isset( $_GET['tn_lookup'] ) ? sanitize_key( wp_unslash( $_GET['tn_lookup'] ) ) : '';
+	$signup_ids = $email ? tn_tde_active_signup_ids_for_email( $email ) : [];
+	get_header();
+	?>
+	<main class="tn-signup-page tn-manage-page">
+		<style>
+			body.tn-event-signups-page .inner-main-title,
+			body.tn-event-signups-page .entry-header,
+			body.tn-event-signups-page .page-header {
+				display: none !important;
+			}
+			body.tn-event-signups-page .site-content,
+			body.tn-event-signups-page .content-area,
+			body.tn-event-signups-page .site-main,
+			body.tn-event-signups-page .entry-content {
+				margin: 0 !important;
+				max-width: none !important;
+				padding: 0 !important;
+				width: 100% !important;
+			}
+			.tn-signup-page {
+				--tn-grid-bg: #0a0a14;
+				--tn-grid-panel: rgba(18,20,34,0.82);
+				--tn-grid-panel-strong: rgba(25,29,48,0.94);
+				--tn-grid-line: rgba(255,255,255,0.16);
+				--tn-grid-text: #f0f0f5;
+				--tn-grid-muted: #b7bdcf;
+				--tn-grid-cyan: #00e6ff;
+				--tn-grid-pink: #ff3ea5;
+				--tn-grid-gold: #ffd166;
+				color: var(--tn-grid-text);
+				background:
+					radial-gradient(circle at 18% 7%, rgba(0,230,255,0.18), transparent 24rem),
+					radial-gradient(circle at 82% 0%, rgba(255,62,165,0.16), transparent 25rem),
+					linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0)),
+					var(--tn-grid-bg);
+				font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				margin-left: calc(50% - 50vw);
+				margin-right: calc(50% - 50vw);
+				max-width: none;
+				min-height: 100vh;
+				padding: clamp(2.5rem, 7vw, 6rem) clamp(1rem, 4vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+				width: 100vw;
+			}
+			.tn-signup-page > * {
+				margin: 0 auto;
+				max-width: 1320px;
+			}
+			.tn-signup-nav {
+				align-items: center;
+				display: flex;
+				gap: 1rem;
+				justify-content: space-between;
+				margin-bottom: clamp(1.4rem, 3vw, 2.6rem);
+			}
+			.tn-signup-brand {
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1rem, 1.5vw, 1.35rem);
+				font-weight: 900;
+				line-height: 1;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav {
+				align-items: center;
+				display: flex;
+				flex-wrap: wrap;
+				gap: clamp(0.75rem, 2vw, 1.5rem);
+				justify-content: flex-end;
+			}
+			.tn-signup-nav nav a {
+				color: var(--tn-grid-muted);
+				font-size: 0.84rem;
+				font-weight: 800;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav a:hover,
+			.tn-signup-nav nav a[aria-current="page"] {
+				color: var(--tn-grid-cyan);
+			}
+			.tn-signup-page-inner {
+				width: min(980px, 100%);
+			}
+			.tn-signup-page h1 {
+				margin: 0 0 0.65rem;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(2.6rem, 6vw, 5.2rem);
+				font-weight: 900;
+				letter-spacing: 0;
+				line-height: 0.9;
+				text-transform: uppercase;
+			}
+			.tn-signup-kicker {
+				color: var(--tn-grid-cyan);
+				font-size: clamp(0.8rem, 1.2vw, 1rem);
+				font-weight: 900;
+				letter-spacing: 0.12em;
+				margin: 0 0 0.55rem;
+				text-transform: uppercase;
+			}
+			.tn-signup-page-intro {
+				max-width: 46rem;
+				margin: 0 0 1.2rem;
+				color: var(--tn-grid-muted);
+				font-size: 1.05rem;
+				line-height: 1.6;
+			}
+			.tn-signup-page-message {
+				margin: 0 0 1rem;
+				padding: 0.85rem 1rem;
+				border-radius: 8px;
+				background: var(--tn-grid-panel);
+				border: 1px solid var(--tn-grid-line);
+			}
+			.tn-signup-page-message.is-success { color: #35e69f; }
+			.tn-signup-page-message.is-error { color: #ff8a8a; }
+			.tn-manage-cards {
+				display: grid;
+				gap: 1rem;
+			}
+			.tn-manage-card {
+				display: grid;
+				gap: 0.9rem;
+				padding: clamp(1rem, 3vw, 1.4rem);
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 8px;
+				background: var(--tn-grid-panel-strong);
+				box-shadow: 0 24px 80px rgba(0,0,0,0.28);
+			}
+			.tn-manage-card-head {
+				display: flex;
+				align-items: baseline;
+				flex-wrap: wrap;
+				gap: 0.5rem 1rem;
+				justify-content: space-between;
+			}
+			.tn-manage-card-title {
+				margin: 0;
+				color: var(--tn-grid-cyan);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1.2rem, 2.4vw, 1.7rem);
+				font-weight: 900;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+			}
+			.tn-manage-card-when {
+				color: var(--tn-grid-muted);
+				font-size: 0.92rem;
+				font-weight: 700;
+			}
+			.tn-manage-card-facts {
+				display: grid;
+				gap: 0.3rem;
+				margin: 0;
+				color: var(--tn-grid-muted);
+				font-size: 0.95rem;
+				line-height: 1.5;
+			}
+			.tn-manage-card-facts strong { color: var(--tn-grid-text); }
+			.tn-manage-card-actions {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.75rem 1rem;
+				align-items: end;
+				justify-content: space-between;
+				border-top: 1px solid var(--tn-grid-line);
+				padding-top: 0.9rem;
+			}
+			.tn-manage-flight-form {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.6rem;
+				align-items: end;
+			}
+			.tn-manage-flight-form label {
+				display: block;
+				margin: 0 0 0.3rem;
+				color: var(--tn-grid-muted);
+				font-size: 0.78rem;
+				font-weight: 800;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+			.tn-manage-flight-form select {
+				min-width: min(320px, 70vw);
+				padding: 0.55rem 0.65rem;
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 6px;
+				background: rgba(7,8,18,0.72);
+				color: var(--tn-grid-text);
+			}
+			.tn-signup-page button {
+				border: 0;
+				border-radius: 999px;
+				cursor: pointer;
+				font-family: Outfit, Inter, sans-serif;
+				font-size: 0.85rem;
+				font-weight: 900;
+				letter-spacing: 0.06em;
+				padding: 0.7rem 1.4rem;
+				text-transform: uppercase;
+			}
+			button.tn-manage-save {
+				background: linear-gradient(135deg, var(--tn-grid-cyan), #58f0ff);
+				color: #06121a;
+			}
+			button.tn-manage-cancel {
+				background: transparent;
+				border: 1px solid rgba(255,138,138,0.65);
+				color: #ff8a8a;
+			}
+			button.tn-manage-cancel:hover {
+				background: rgba(255,138,138,0.12);
+			}
+			.tn-manage-empty,
+			.tn-manage-expired {
+				display: grid;
+				gap: 0.9rem;
+				padding: clamp(1rem, 3vw, 1.5rem);
+				border: 1px solid rgba(0,230,255,0.22);
+				border-radius: 8px;
+				background:
+					linear-gradient(135deg, rgba(0,230,255,0.08), rgba(255,62,165,0.04)),
+					rgba(18,20,34,0.82);
+			}
+			.tn-manage-expired h2,
+			.tn-manage-empty h2 {
+				margin: 0;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1.3rem, 2.6vw, 1.9rem);
+				font-weight: 900;
+				line-height: 1.05;
+				text-transform: uppercase;
+			}
+			.tn-manage-expired p,
+			.tn-manage-empty p {
+				margin: 0;
+				color: var(--tn-grid-muted);
+				line-height: 1.55;
+			}
+			.tn-manage-lookup-form {
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) auto;
+				gap: 0.75rem;
+				align-items: end;
+			}
+			.tn-manage-lookup-form label {
+				display: block;
+				margin: 0 0 0.3rem;
+				color: var(--tn-grid-muted);
+				font-size: 0.78rem;
+				font-weight: 800;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+			.tn-manage-lookup-form input[type="email"] {
+				width: 100%;
+				padding: 0.6rem 0.7rem;
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 6px;
+				background: rgba(7,8,18,0.72);
+				color: var(--tn-grid-text);
+			}
+			.tn-manage-lookup-form button {
+				background: linear-gradient(135deg, var(--tn-grid-gold), #ffe29a);
+				color: #241a02;
+			}
+			.tn-signup-trap {
+				position: absolute !important;
+				left: -9999px !important;
+			}
+			@media (max-width: 720px) {
+				.tn-manage-lookup-form {
+					grid-template-columns: 1fr;
+				}
+				.tn-manage-card-actions,
+				.tn-manage-flight-form {
+					align-items: stretch;
+					flex-direction: column;
+				}
+				.tn-signup-page button {
+					width: 100%;
+				}
+			}
+		</style>
+		<div class="tn-signup-nav">
+			<a class="tn-signup-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>">Trivia Nationals 2026</a>
+			<nav aria-label="Manage signups page navigation">
+				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">Home</a>
+				<a href="<?php echo esc_url( home_url( '/full-schedule/' ) ); ?>">Full Schedule</a>
+				<a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Signups</a>
+				<a href="<?php echo esc_url( home_url( '/manage-signups/' ) ); ?>" aria-current="page">Manage</a>
+			</nav>
+		</div>
+		<div class="tn-signup-page-inner">
+			<p class="tn-signup-kicker">August 7 - 9, 2026 / Las Vegas</p>
+			<h1>Manage Your Signups</h1>
+			<?php if ( $status === 'updated' ) : ?>
+				<p class="tn-signup-page-message is-success">Your flight was updated. A confirmation email is on its way.</p>
+			<?php elseif ( $status === 'cancelled' ) : ?>
+				<p class="tn-signup-page-message is-success">Your signup was cancelled. A confirmation email is on its way.</p>
+			<?php elseif ( $status === 'duplicate' ) : ?>
+				<p class="tn-signup-page-message is-error">You already have a signup for that flight, so nothing was changed.</p>
+			<?php elseif ( in_array( $status, [ 'invalid', 'missing', 'error' ], true ) ) : ?>
+				<p class="tn-signup-page-message is-error">Sorry, that change could not be saved. Please try again.</p>
+			<?php endif; ?>
+			<?php if ( $lookup_status === 'sent' ) : ?>
+				<p class="tn-signup-page-message is-success">Thanks! Check that inbox for a fresh manage link.</p>
+			<?php elseif ( in_array( $lookup_status, [ 'invalid', 'error' ], true ) ) : ?>
+				<p class="tn-signup-page-message is-error">Sorry, we could not send that email. Please check the address and try again.</p>
+			<?php endif; ?>
+			<?php if ( ! $email ) : ?>
+				<section class="tn-manage-expired" aria-labelledby="tn-manage-expired-title">
+					<h2 id="tn-manage-expired-title">This link has expired</h2>
+					<p>Manage links only work for 72 hours. Enter your contact email below and we&#8217;ll send you a fresh one, along with a summary of your current signups.</p>
+					<form class="tn-manage-lookup-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="tn_tde_email_signup_summary">
+						<input type="hidden" name="tn_signup_redirect" value="<?php echo esc_url( home_url( '/manage-signups/' ) ); ?>">
+						<?php wp_nonce_field( 'tn_tde_email_signup_summary', 'tn_tde_email_signup_summary_nonce' ); ?>
+						<p>
+							<label for="tn_manage_lookup_email">Contact Email</label>
+							<input type="email" id="tn_manage_lookup_email" name="tn_signup_lookup_email" required autocomplete="email">
+						</p>
+						<p class="tn-signup-trap" aria-hidden="true">
+							<label for="tn_manage_lookup_company">Leave this field blank</label>
+							<input type="text" id="tn_manage_lookup_company" name="tn_signup_lookup_company" tabindex="-1" autocomplete="new-password">
+						</p>
+						<button type="submit">Email Me a Link</button>
+					</form>
+				</section>
+			<?php elseif ( ! $signup_ids ) : ?>
+				<section class="tn-manage-empty" aria-labelledby="tn-manage-empty-title">
+					<h2 id="tn-manage-empty-title">No active signups</h2>
+					<p>There are no active event signups associated with <strong><?php echo esc_html( $email ); ?></strong>.</p>
+					<p><a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>" style="color: var(--tn-grid-cyan); font-weight: 800;">Sign up for events &rarr;</a></p>
+				</section>
+			<?php else : ?>
+				<p class="tn-signup-page-intro">Signups for <strong style="color: var(--tn-grid-text);"><?php echo esc_html( $email ); ?></strong>. Change a flight or cancel a signup below &mdash; changes take effect immediately and you&#8217;ll get a confirmation email.</p>
+				<div class="tn-manage-cards">
+					<?php foreach ( $signup_ids as $signup_id ) :
+						$meta = tn_tde_manage_signup_card_meta( $signup_id );
+						$event = $meta['event_slug'] ? tn_tde_get_event_by_detail_slug( $meta['event_slug'] ) : null;
+						$flights = $event ? tn_tde_signup_flight_options_for_event( $event ) : [];
+						$when = trim( implode( ', ', array_filter( [ $meta['event_day'], $meta['event_date'] ] ) ) );
+						$time = $meta['event_start'] && $meta['event_end'] ? $meta['event_start'] . ' - ' . $meta['event_end'] : $meta['event_start'];
+						?>
+						<section class="tn-manage-card" aria-label="<?php echo esc_attr( $meta['event_title'] ?: 'Event signup' ); ?>">
+							<div class="tn-manage-card-head">
+								<h2 class="tn-manage-card-title"><?php echo esc_html( $meta['event_title'] ?: 'Event signup' ); ?></h2>
+								<?php if ( $when || $time ) : ?>
+									<span class="tn-manage-card-when"><?php echo esc_html( trim( $when . ( $time ? ', ' . $time : '' ), ', ' ) ); ?></span>
+								<?php endif; ?>
+							</div>
+							<dl class="tn-manage-card-facts">
+								<?php if ( $meta['flight'] ) : ?><div><strong>Flight:</strong> <?php echo esc_html( $meta['flight'] ); ?></div><?php endif; ?>
+								<?php if ( $meta['event_location'] ) : ?><div><strong>Location:</strong> <?php echo esc_html( $meta['event_location'] ); ?></div><?php endif; ?>
+								<?php if ( $meta['team'] ) : ?><div><strong>Team:</strong> <?php echo esc_html( $meta['team'] ); ?></div><?php endif; ?>
+								<?php if ( $meta['team_members'] ) : ?><div><strong>Team Members:</strong> <?php echo esc_html( $meta['team_members'] ); ?></div><?php endif; ?>
+							</dl>
+							<div class="tn-manage-card-actions">
+								<?php if ( $flights ) : ?>
+									<form class="tn-manage-flight-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+										<input type="hidden" name="action" value="tn_tde_manage_signup_update">
+										<input type="hidden" name="tn_token" value="<?php echo esc_attr( $token ); ?>">
+										<input type="hidden" name="signup_id" value="<?php echo esc_attr( $signup_id ); ?>">
+										<?php wp_nonce_field( 'tn_tde_manage_signup_' . $signup_id, 'tn_tde_manage_nonce' ); ?>
+										<p style="margin:0;">
+											<label for="tn_manage_flight_<?php echo esc_attr( $signup_id ); ?>">Flight</label>
+											<select id="tn_manage_flight_<?php echo esc_attr( $signup_id ); ?>" name="tn_signup_flight" required>
+												<?php foreach ( $flights as $flight ) : ?>
+													<option value="<?php echo esc_attr( $flight['value'] ); ?>" <?php selected( $flight['value'] === $meta['flight'] ); ?>><?php echo esc_html( $flight['label'] ); ?></option>
+												<?php endforeach; ?>
+											</select>
+										</p>
+										<button type="submit" class="tn-manage-save">Save Change</button>
+									</form>
+								<?php else : ?>
+									<span class="tn-manage-card-when">Flight changes are not available for this event.</span>
+								<?php endif; ?>
+								<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Cancel your <?php echo esc_js( $meta['event_title'] ?: 'event' ); ?> signup? This removes you from the list.');">
+									<input type="hidden" name="action" value="tn_tde_manage_signup_cancel">
+									<input type="hidden" name="tn_token" value="<?php echo esc_attr( $token ); ?>">
+									<input type="hidden" name="signup_id" value="<?php echo esc_attr( $signup_id ); ?>">
+									<?php wp_nonce_field( 'tn_tde_manage_signup_' . $signup_id, 'tn_tde_manage_nonce' ); ?>
+									<button type="submit" class="tn-manage-cancel">Cancel Signup</button>
+								</form>
+							</div>
+						</section>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</div>
+	</main>
+	<?php
+	get_footer();
+}
+
+function tn_tde_manage_signup_guard( $expect_signup ) {
+	$token = isset( $_POST['tn_token'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_token'] ) ) : '';
+	$signup_id = isset( $_POST['signup_id'] ) ? absint( $_POST['signup_id'] ) : 0;
+	$redirect = $token ? tn_tde_manage_signups_url( $token ) : home_url( '/manage-signups/' );
+	$fail = static function( $code ) use ( $redirect ) {
+		wp_safe_redirect( add_query_arg( 'tn_manage', $code, $redirect ) );
+		exit;
+	};
+	$email = tn_tde_manage_signups_email_for_token( $token );
+	if ( ! $email ) $fail( 'invalid' );
+	if ( ! isset( $_POST['tn_tde_manage_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['tn_tde_manage_nonce'] ) ), 'tn_tde_manage_signup_' . $signup_id ) ) $fail( 'invalid' );
+	if ( $expect_signup ) {
+		$signup = get_post( $signup_id );
+		if ( ! $signup || $signup->post_type !== 'tn_tde_signup' ) $fail( 'invalid' );
+		$signup_email = tn_tde_signup_meta_value( $signup_id, 'email' );
+		if ( strtolower( trim( $signup_email ) ) !== strtolower( trim( $email ) ) ) $fail( 'invalid' );
+		if ( tn_tde_signup_status( $signup_id ) !== 'active' ) $fail( 'invalid' );
+	}
+	return [ 'token' => $token, 'email' => $email, 'signup_id' => $signup_id, 'redirect' => $redirect, 'fail' => $fail ];
+}
+
+function tn_tde_send_manage_confirmation_email( $email, $subject, $intro, $signup_id, $token ) {
+	$meta = tn_tde_manage_signup_card_meta( $signup_id );
+	$when = trim( implode( ', ', array_filter( [ $meta['event_day'], $meta['event_date'], $meta['event_start'] ] ) ) );
+	$html = '<div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">';
+	$html .= '<h2 style="margin:0 0 16px;color:#17406f;">' . esc_html( $subject ) . '</h2>';
+	$html .= '<p>' . esc_html( $intro ) . '</p>';
+	$html .= '<ul style="margin:8px 0 16px;padding-left:18px;">';
+	$html .= '<li><strong>Event:</strong> ' . esc_html( $meta['event_title'] ?: 'Event' ) . '</li>';
+	$html .= tn_tde_signup_summary_email_detail( 'Flight', $meta['flight'] );
+	$html .= tn_tde_signup_summary_email_detail( 'Time', $when );
+	$html .= tn_tde_signup_summary_email_detail( 'Location', $meta['event_location'] );
+	$html .= '</ul>';
+	$html .= '<p><a href="' . esc_url( tn_tde_manage_signups_url( $token ) ) . '">Manage your signups</a> (link works for 72 hours from when it was first emailed).</p>';
+	$html .= '<p style="color:#666;font-size:13px;">If you did not make this change, please contact info@trivianationals.org.</p>';
+	$html .= '</div>';
+	wp_mail(
+		$email,
+		$subject,
+		$html,
+		[
+			'From: Trivia Nationals <info@trivianationals.org>',
+			'Reply-To: Trivia Nationals <info@trivianationals.org>',
+			'Content-Type: text/html; charset=UTF-8',
+		]
+	);
+}
+
+add_action( 'admin_post_tn_tde_manage_signup_update', 'tn_tde_handle_manage_signup_update' );
+add_action( 'admin_post_nopriv_tn_tde_manage_signup_update', 'tn_tde_handle_manage_signup_update' );
+add_action( 'admin_post_tn_tde_manage_signup_cancel', 'tn_tde_handle_manage_signup_cancel' );
+add_action( 'admin_post_nopriv_tn_tde_manage_signup_cancel', 'tn_tde_handle_manage_signup_cancel' );
+
+function tn_tde_handle_manage_signup_update() {
+	$context = tn_tde_manage_signup_guard( true );
+	$signup_id = $context['signup_id'];
+	$fail = $context['fail'];
+	$flight = isset( $_POST['tn_signup_flight'] ) ? sanitize_text_field( wp_unslash( $_POST['tn_signup_flight'] ) ) : '';
+	$event_slug = tn_tde_signup_meta_value( $signup_id, 'event_slug' );
+	$event = $event_slug ? tn_tde_get_event_by_detail_slug( $event_slug ) : null;
+	if ( ! $event ) $fail( 'error' );
+	$option = $flight !== '' ? tn_tde_signup_option_for_value( $event, $flight ) : null;
+	if ( ! $option ) $fail( 'missing' );
+	$current_flight = tn_tde_signup_meta_value( $signup_id, 'flight' );
+	if ( $option['value'] === $current_flight ) {
+		wp_safe_redirect( add_query_arg( 'tn_manage', 'updated', $context['redirect'] ) );
+		exit;
+	}
+	foreach ( tn_tde_active_signup_ids_for_email( $context['email'] ) as $other_id ) {
+		if ( (int) $other_id === (int) $signup_id ) continue;
+		if ( tn_tde_signup_meta_value( $other_id, 'event_title' ) === tn_tde_signup_meta_value( $signup_id, 'event_title' )
+			&& tn_tde_signup_meta_value( $other_id, 'flight' ) === $option['value'] ) {
+			$fail( 'duplicate' );
+		}
+	}
+	$target_event = ! empty( $option['event'] ) ? $option['event'] : $event;
+	$updates = [
+		'event_slug' => tn_tde_event_detail_slug( $target_event ),
+		'event_title' => sanitize_text_field( $target_event['base_title'] ?? $target_event['title'] ?? '' ),
+		'event_session' => sanitize_text_field( $option['session'] ?? '' ),
+		'event_day' => sanitize_text_field( $target_event['day_label'] ?? '' ),
+		'event_date' => sanitize_text_field( $target_event['date_label'] ?? '' ),
+		'event_start' => sanitize_text_field( $target_event['start'] ?? '' ),
+		'event_end' => sanitize_text_field( $target_event['end'] ?? '' ),
+		'event_location' => sanitize_text_field( $target_event['location_label'] ?? '' ),
+		'flight' => $option['value'],
+		'sync_status' => 'pending',
+	];
+	foreach ( $updates as $key => $value ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_' . $key, $value );
+	}
+	delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+	tn_tde_sync_event_signup( $signup_id, 8 );
+	if ( tn_tde_signup_meta_value( $signup_id, 'sync_status' ) === 'pending' ) {
+		tn_tde_queue_event_signup_sync( $signup_id );
+	}
+	tn_tde_send_manage_confirmation_email(
+		$context['email'],
+		'Your Trivia Nationals signup was updated',
+		'Your event signup was moved to a new flight. Here are the updated details:',
+		$signup_id,
+		$context['token']
+	);
+	wp_safe_redirect( add_query_arg( 'tn_manage', 'updated', $context['redirect'] ) );
+	exit;
+}
+
+function tn_tde_handle_manage_signup_cancel() {
+	$context = tn_tde_manage_signup_guard( true );
+	$signup_id = $context['signup_id'];
+	update_post_meta( $signup_id, '_tn_tde_signup_status', 'cancelled' );
+	update_post_meta( $signup_id, '_tn_tde_signup_status_changed_at', current_time( 'mysql' ) );
+	update_post_meta( $signup_id, '_tn_tde_signup_status_reason', 'Cancelled by attendee via manage link' );
+	update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'pending' );
+	delete_post_meta( $signup_id, '_tn_tde_signup_sync_error' );
+	tn_tde_sync_event_signup( $signup_id, 8 );
+	if ( tn_tde_signup_meta_value( $signup_id, 'sync_status' ) === 'pending' ) {
+		tn_tde_queue_event_signup_sync( $signup_id );
+	}
+	tn_tde_send_manage_confirmation_email(
+		$context['email'],
+		'Your Trivia Nationals signup was cancelled',
+		'This event signup was cancelled and you have been removed from the list:',
+		$signup_id,
+		$context['token']
+	);
+	wp_safe_redirect( add_query_arg( 'tn_manage', 'cancelled', $context['redirect'] ) );
+	exit;
 }
 
 function tn_tde_is_event_signups_request() {
@@ -4505,8 +5145,8 @@ function tn_tde_render_signup_page() {
 				</div>
 			</form>
 			<section class="tn-signup-lookup" aria-labelledby="tn-signup-lookup-title">
-				<h2 id="tn-signup-lookup-title">Check Your Event Signups</h2>
-				<p>Enter the contact email you used for event signups and we’ll email a summary of anything currently associated with that address.</p>
+				<h2 id="tn-signup-lookup-title">Check or Manage Your Event Signups</h2>
+				<p>Enter the contact email you used for event signups and we’ll email a summary of anything currently associated with that address, plus a secure link to change flights or cancel signups.</p>
 				<?php if ( $lookup_status === 'sent' ) : ?>
 					<p class="tn-signup-page-message is-success">Thanks! Check that inbox for your signup summary.</p>
 				<?php elseif ( in_array( $lookup_status, [ 'invalid', 'error' ], true ) ) : ?>
