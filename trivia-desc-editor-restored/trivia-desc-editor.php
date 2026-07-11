@@ -5283,11 +5283,13 @@ function tn_tde_sync_event_signup( $signup_id, $timeout = 20 ) {
 		$row[ $field ] = (string) get_post_meta( $signup->ID, '_tn_tde_signup_' . $field, true );
 	}
 	if ( $row['status'] === '' ) $row['status'] = 'active';
+	// Cancelled signups are removed from the Sheet instead of upserted; restoring one re-adds it on the next sync.
+	$sync_action = $row['status'] === 'cancelled' ? 'event_signup_delete' : 'event_signup_upsert';
 	$response = wp_remote_post( $endpoint, [
 		'timeout' => max( 1, absint( $timeout ) ),
 		'redirection' => 0,
 		'headers' => [ 'Content-Type' => 'application/json; charset=utf-8' ],
-		'body' => wp_json_encode( [ 'secret' => $secret, 'action' => 'event_signup_upsert', 'signup' => $row ] ),
+		'body' => wp_json_encode( [ 'secret' => $secret, 'action' => $sync_action, 'signup' => $row ] ),
 	] );
 	if ( is_wp_error( $response ) ) {
 		update_post_meta( $signup_id, '_tn_tde_signup_sync_status', 'failed' );
