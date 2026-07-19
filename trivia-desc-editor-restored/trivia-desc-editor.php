@@ -2981,6 +2981,7 @@ function tn_tde_allowed_description_html() {
 function tn_tde_clean_description_html( $html ) {
 	$html = (string) $html;
 	$html = wp_kses( $html, tn_tde_allowed_description_html() );
+	$html = make_clickable( $html );
 	$html = preg_replace_callback( '/<a\s+([^>]*href=[^>]*)>/i', function( $match ) {
 		$tag = $match[0];
 		if ( stripos( $tag, 'rel=' ) === false ) {
