@@ -3062,6 +3062,7 @@ function tn_tde_get_home_schedule_events() {
 			'location' => $location,
 			'location_label' => tn_tde_location_label( $location ),
 			'presenters' => tn_tde_clean_presenters( $presenters ),
+			'signup_full' => false,
 		];
 		if ( $sessions ) {
 			foreach ( $sessions as $session ) {
@@ -3074,6 +3075,7 @@ function tn_tde_get_home_schedule_events() {
 				$session_event['after_hours'] = $base_event['after_hours'];
 				$session_event['location'] = $session['location'];
 				$session_event['location_label'] = tn_tde_location_label( $session['location'] );
+				$session_event['signup_full'] = ! empty( $session['full'] );
 				$events[] = $session_event;
 			}
 		} else {
@@ -3118,12 +3120,14 @@ function tn_tde_clean_sessions( $sessions ) {
 		$start = sanitize_text_field( $session['start'] ?? '' );
 		$end = sanitize_text_field( $session['end'] ?? '' );
 		$location = tn_tde_normalize_location( $session['location'] ?? '' );
+		$full = ! empty( $session['full'] );
 		if ( $label === '' && $start === '' && $end === '' && $location === '' ) return null;
 		return [
 			'label' => $label,
 			'start' => $start,
 			'end' => $end,
 			'location' => $location,
+			'full' => $full,
 		];
 	}, $sessions ) ) );
 }
@@ -3221,7 +3225,7 @@ function tn_tde_signup_is_ttg_event( $event ) {
 }
 
 function tn_tde_signup_ttg_flight_labels() {
-	return [ 'Flight A', 'Flight B', 'Flight C', 'Flight D', 'Flight E' ];
+	return [ 'Flight A', 'Flight B', 'Flight C' ];
 }
 
 function tn_tde_signup_is_friday_event( $event ) {
@@ -3259,8 +3263,11 @@ function tn_tde_signup_flight_options_for_event( $event ) {
 	if ( $base_title === '' ) return [];
 	$options = [];
 	$ttg_fallback_event = null;
+	$has_available_candidate = false;
 	foreach ( tn_tde_get_home_schedule_events() as $candidate ) {
 		if ( sanitize_text_field( $candidate['base_title'] ?? $candidate['title'] ?? '' ) !== $base_title ) continue;
+		if ( ! empty( $candidate['signup_full'] ) ) continue;
+		$has_available_candidate = true;
 		if ( tn_tde_signup_is_ttg_event( $candidate ) ) {
 			if ( tn_tde_signup_is_friday_event( $candidate ) || ! $ttg_fallback_event ) $ttg_fallback_event = $candidate;
 		}
@@ -3283,7 +3290,7 @@ function tn_tde_signup_flight_options_for_event( $event ) {
 			];
 		}
 	}
-	if ( ! $options && tn_tde_signup_is_ttg_event( $event ) ) {
+	if ( ! $options && $has_available_candidate && tn_tde_signup_is_ttg_event( $event ) ) {
 		$fallback_event = is_array( $ttg_fallback_event ) ? $ttg_fallback_event : $event;
 		$fallback_event['_tn_tde_force_ttg_friday'] = true;
 		foreach ( tn_tde_signup_ttg_flight_labels() as $flight_label ) {
@@ -8508,7 +8515,7 @@ function trivia_desc_editor_page() {
   .tde-session-add:hover,
   .tde-session-remove:hover { background: #f0f2f5; }
   .tde-session-row {
-    display: grid; grid-template-columns: minmax(180px, 1.4fr) 110px 110px minmax(180px, 1fr) auto;
+    display: grid; grid-template-columns: minmax(180px, 1.4fr) 110px 110px minmax(180px, 1fr) 82px auto;
     gap: 0.5rem; align-items: end; padding: 0.55rem 0; border-top: 1px solid #e1e4e8;
   }
   .tde-session-row:first-of-type { border-top: none; padding-top: 0; }
@@ -8525,6 +8532,12 @@ function trivia_desc_editor_page() {
   .tde-session-row input:focus,
   .tde-session-row select:focus {
     outline: none; border-color: #0096a0; box-shadow: 0 0 0 3px rgba(0,150,160,0.12);
+  }
+  .tde-session-full label {
+    display: flex; align-items: center; gap: 0.35rem; min-height: 36px; margin-bottom: 0;
+  }
+  .tde-session-full input[type="checkbox"] {
+    width: auto; margin: 0; padding: 0; accent-color: #0096a0;
   }
   .tde-presenter-photo-field {
     display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center;
@@ -8774,7 +8787,8 @@ function trivia_desc_editor_page() {
         label: String((session && session.label) || '').trim(),
         start: String((session && session.start) || '').trim(),
         end: String((session && session.end) || '').trim(),
-        location: normalizeLocation((session && session.location) || '')
+        location: normalizeLocation((session && session.location) || ''),
+        full: !!(session && session.full)
       };
     }).filter(function(session) {
       return session.label || session.start || session.end || session.location;
@@ -9165,8 +9179,9 @@ function trivia_desc_editor_page() {
 
   function buildSessionRow(key, idx, session) {
     var sid = escId(key);
-    session = session || { label: '', start: '', end: '', location: '' };
+    session = session || { label: '', start: '', end: '', location: '', full: false };
     session.location = normalizeLocation(session.location);
+    session.full = !!session.full;
     var baseId = 'session-' + sid + '-' + idx;
     var out = '';
     out += '<div class="tde-session-row" data-session-index="' + idx + '">';
@@ -9190,6 +9205,9 @@ function trivia_desc_editor_page() {
       out += '<option value="' + escHtml(value) + '"' + (session.location === value ? ' selected' : '') + '>' + escHtml(LOCATION_OPTIONS[value]) + '</option>';
     });
     out += '</select>';
+    out += '</div>';
+    out += '<div class="tde-session-full">';
+    out += '<label for="' + baseId + '-full"><input type="checkbox" id="' + baseId + '-full" data-key="' + escHtml(key) + '" data-session-field="full" ' + (session.full ? ' checked' : '') + ' onchange="tdeSessionChange(this)"> Full</label>';
     out += '</div>';
     out += '<button type="button" class="tde-session-remove" onclick="tdeRemoveSession(this)">Remove</button>';
     out += '</div>';
@@ -9913,11 +9931,13 @@ function trivia_desc_editor_page() {
       var startEl = row.querySelector('[data-session-field="start"]');
       var endEl = row.querySelector('[data-session-field="end"]');
       var locationEl = row.querySelector('[data-session-field="location"]');
+      var fullEl = row.querySelector('[data-session-field="full"]');
       return {
         label: labelEl ? labelEl.value : '',
         start: startEl ? startEl.value : '',
         end: endEl ? endEl.value : '',
-        location: locationEl ? locationEl.value : ''
+        location: locationEl ? locationEl.value : '',
+        full: !!(fullEl && fullEl.checked)
       };
     }));
   }
