@@ -86,6 +86,22 @@ sha256_of() {
 }
 
 cmd_pull() {
+	local force=0
+	if [[ "${1:-}" == "--force" ]]; then
+		force=1
+	fi
+
+	if [[ $force -ne 1 && -f "$LOCAL_PATH" ]]; then
+		local dirty
+		dirty="$(git -C "$REPO_ROOT" status --porcelain -- "$LOCAL_PATH" 2>/dev/null || true)"
+		if [[ -n "$dirty" ]]; then
+			echo "error: local working copy has uncommitted changes, refusing to overwrite it:" >&2
+			echo "$dirty" >&2
+			echo "Commit or stash your changes first, or re-run as 'pull --force' to overwrite anyway (a backup will still be made)." >&2
+			exit 1
+		fi
+	fi
+
 	local remote_tmp
 	remote_tmp="$(mktemp_tracked)"
 	echo "Pulling live file from $FTP_HOST ..."
@@ -96,6 +112,12 @@ cmd_pull() {
 	else
 		echo "Live differs from local working copy. Updating local copy:"
 		diff -u "$LOCAL_PATH" "$remote_tmp" || true
+		if [[ -f "$LOCAL_PATH" ]]; then
+			mkdir -p "$BACKUP_DIR"
+			local local_backup="$BACKUP_DIR/trivia-desc-editor.php.pre-pull.$(date +%Y%m%d-%H%M%S).bak"
+			cp "$LOCAL_PATH" "$local_backup"
+			echo "Backed up previous local copy to $local_backup"
+		fi
 		cp "$remote_tmp" "$LOCAL_PATH"
 	fi
 
@@ -172,11 +194,14 @@ cmd_deploy() {
 }
 
 case "${1:-}" in
-pull) cmd_pull ;;
+pull)
+	shift
+	cmd_pull "$@"
+	;;
 diff) cmd_diff ;;
 deploy) cmd_deploy ;;
 *)
-	echo "Usage: $(basename "$0") pull|diff|deploy" >&2
+	echo "Usage: $(basename "$0") pull [--force]|diff|deploy" >&2
 	exit 1
 	;;
 esac

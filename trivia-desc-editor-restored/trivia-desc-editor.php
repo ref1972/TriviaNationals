@@ -467,6 +467,58 @@ function tn_tde_default_venue_videos() {
 	];
 }
 
+/**
+ * Add a direct electronic-ticket link immediately above the homepage countdown.
+ * The homepage itself is Elementor-managed, so this is inserted at runtime to
+ * keep the destination and presentation under plugin control.
+ */
+add_action( 'wp_footer', function() {
+	if ( ! is_front_page() ) return;
+	?>
+	<style id="tn-home-ticket-link-styles">
+		body.home .countdown-section {
+			align-items: center;
+			flex-direction: column;
+			gap: 1.15rem;
+		}
+		body.home .tn-home-ticket-link {
+			align-items: center;
+			background: linear-gradient(135deg, var(--cyan, #00e6ff), #00c9db);
+			border-radius: 999px;
+			box-shadow: 0 0 30px rgba(0, 230, 255, 0.3);
+			color: var(--bg-dark, #071019) !important;
+			display: inline-flex;
+			font-family: var(--font-display, Outfit, Inter, sans-serif);
+			font-size: 0.88rem;
+			font-weight: 800;
+			gap: 0.55rem;
+			justify-content: center;
+			letter-spacing: 0.08em;
+			padding: 0.82rem 1.5rem;
+			text-decoration: none !important;
+			text-transform: uppercase;
+			transition: transform 0.2s, box-shadow 0.3s;
+		}
+		body.home .tn-home-ticket-link:hover,
+		body.home .tn-home-ticket-link:focus-visible {
+			box-shadow: 0 0 50px rgba(0, 230, 255, 0.5);
+			transform: translateY(-2px);
+		}
+	</style>
+	<script id="tn-home-ticket-link-script">
+	(function() {
+		var section = document.querySelector('.countdown-section');
+		if (!section || section.querySelector('.tn-home-ticket-link')) return;
+		var link = document.createElement('a');
+		link.className = 'tn-home-ticket-link';
+		link.href = <?php echo wp_json_encode( home_url( '/my-tickets/' ) ); ?>;
+		link.textContent = 'View My Tickets →';
+		section.insertBefore(link, section.firstChild);
+	})();
+	</script>
+	<?php
+}, 30 );
+
 function tn_tde_clean_venue_videos( $videos ) {
 	if ( ! is_array( $videos ) ) return [];
 	$clean = [];
