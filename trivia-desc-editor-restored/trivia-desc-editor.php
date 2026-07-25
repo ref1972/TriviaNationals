@@ -3202,6 +3202,7 @@ function tn_tde_signup_event_titles() {
 		'Crossword Challenge',
 		'IQA Individual Championship',
 		'IQA Individual Quiz Championship',
+		'Knock Out Quiz with Steve Perry',
 		'IQA Knock Out Quiz with Steve Perry',
 	];
 }
