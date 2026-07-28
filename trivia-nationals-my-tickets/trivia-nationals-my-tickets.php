@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.5.5
+ * Version: 0.5.8
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -209,11 +209,12 @@ JS
             foreach ($order->get_items('line_item') as $item_id => $item) {
                 if (!$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) continue;
                 $quantity = max(1, (int) $item->get_quantity());
+                $preferred_names = self::preferred_names_for_item($item, $order, $quantity);
                 for ($position = 1; $position <= $quantity; $position++) {
                     $raw = (string) $item->get_meta('_tn_ticket_checked_in_' . $position, true);
                     $tickets[] = [
                         'registered_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
-                        'preferred_name' => self::preferred_name($item, $order),
+                        'preferred_name' => $preferred_names[$position - 1],
                         'code' => self::ticket_code((int) $order->get_id(), (int) $item_id, $position),
                         'checkin' => $raw !== '' && is_array(json_decode($raw, true)),
                     ];
@@ -250,12 +251,12 @@ JS
                 foreach ($order->get_items('line_item') as $item_id => $item) {
                     if (!$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) continue;
                     $quantity = max(1, (int) $item->get_quantity());
-                    $preferred_name = self::preferred_name($item, $order);
+                    $preferred_names = self::preferred_names_for_item($item, $order, $quantity);
                     for ($position = 1; $position <= $quantity; $position++) {
                         $roster[] = [
                             'id' => 'wc:' . $order->get_id() . ':' . $item_id . ':' . $position,
-                            'name' => $preferred_name,
-                            'preferred_name' => $preferred_name,
+                            'name' => $preferred_names[$position - 1],
+                            'preferred_name' => $preferred_names[$position - 1],
                             'email' => $email,
                         ];
                     }
@@ -443,7 +444,7 @@ JS
                 }
                 $quantity = max(1, (int) $item->get_quantity());
                 $registered_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
-                $preferred_name = self::preferred_name($item, $order);
+                $preferred_names = self::preferred_names_for_item($item, $order, $quantity);
                 for ($position = 1; $position <= $quantity; $position++) {
                     $tickets[] = [
                         'kind' => 'woocommerce',
@@ -453,7 +454,7 @@ JS
                         'position' => $position,
                         'quantity' => $quantity,
                         'registered_name' => $registered_name,
-                        'preferred_name' => $preferred_name,
+                        'preferred_name' => $preferred_names[$position - 1],
                         'title' => self::ELIGIBLE_PRODUCT_NAME,
                         'order_label' => '#' . $order->get_order_number(),
                         'code' => self::ticket_code((int) $order->get_id(), (int) $item_id, $position),
@@ -519,14 +520,49 @@ JS
         return array_values(array_unique(array_filter(array_map('absint', preg_split('/[\s,]+/', $value)))));
     }
 
-    private static function preferred_name(WC_Order_Item_Product $item, WC_Order $order): string {
+    /**
+     * All non-empty, trimmed string values stored under a meta key on an
+     * order item. get_meta($key, false) returns an array of WC_Meta_Data
+     * objects (not raw values) — unlike get_meta($key, true), which
+     * unwraps to a single scalar. Handles both shapes defensively.
+     *
+     * @return string[]
+     */
+    private static function meta_values_for_key(WC_Order_Item_Product $item, string $key): array {
+        return array_values(array_filter(array_map(
+            static function ($v): string {
+                $raw = $v instanceof WC_Meta_Data ? $v->value : $v;
+                return trim(wp_strip_all_tags((string) $raw));
+            },
+            (array) $item->get_meta($key, false)
+        )));
+    }
+
+    /**
+     * Per-seat preferred names for a ticket line item, size == $quantity.
+     * Reads ALL values stored under each candidate meta key (get_meta($key,
+     * false) — WooCommerce meta supports multiple values per key), not just
+     * the first, so a manually split multi-ticket line item (see order
+     * 19505) resolves to distinct names per seat. A single shared value
+     * (the common case) is repeated for every seat, same as before. Falls
+     * back to the order's billing name only if no preferred-name meta
+     * exists at all.
+     *
+     * @return string[]
+     */
+    private static function preferred_names_for_item(WC_Order_Item_Product $item, WC_Order $order, int $quantity): array {
         foreach (['Preferred Name for Ticket/Badge', 'Preferred Name', 'preferred_name'] as $key) {
-            $name = trim(wp_strip_all_tags((string) $item->get_meta($key, true)));
-            if ($name !== '') {
-                return $name;
+            $values = self::meta_values_for_key($item, $key);
+            if ($values) {
+                $names = [];
+                for ($i = 0; $i < $quantity; $i++) {
+                    $names[] = $values[$i] ?? end($values);
+                }
+                return $names;
             }
         }
-        return trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+        $fallback = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+        return array_fill(0, $quantity, $fallback);
     }
 
     private static function ticket_code(int $order_id, int $item_id, int $position): string {
@@ -684,6 +720,7 @@ JS
         $checkin_key = '_tn_ticket_checked_in_' . $position;
         $checkin_raw = (string) $item->get_meta($checkin_key, true);
         $checkin = $checkin_raw !== '' ? json_decode($checkin_raw, true) : null;
+        $preferred_names = self::preferred_names_for_item($item, $order, max(1, (int) $item->get_quantity()));
         return [
             'valid' => true,
             'kind' => 'woocommerce',
@@ -692,7 +729,7 @@ JS
             'item_id' => $item_id,
             'position' => $position,
             'registered_name' => trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name()),
-            'preferred_name' => self::preferred_name($item, $order),
+            'preferred_name' => $preferred_names[$position - 1],
             'code' => self::ticket_code($order_id, $item_id, $position),
             'source_label' => '#' . $order->get_order_number(),
             'checkin_key' => $checkin_key,
