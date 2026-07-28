@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.5.8
+ * Version: 0.5.9
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -32,6 +32,7 @@ final class TN_My_Tickets {
         add_action('admin_post_tn_ticket_email_copy', [self::class, 'handle_email_copy']);
         add_action('admin_post_tn_ticket_check_in', [self::class, 'handle_check_in']);
         add_action('admin_post_tn_allocated_ticket_save', [self::class, 'handle_allocated_ticket_save']);
+        add_action('admin_post_tn_save_ticket_names', [self::class, 'handle_save_ticket_names']);
         add_action('template_redirect', [self::class, 'require_staff_for_scanner'], 1);
         add_action('template_redirect', [self::class, 'serve_manifest'], 0);
         add_action('wp_head', [self::class, 'scanner_app_meta']);
@@ -565,6 +566,126 @@ JS
         return array_fill(0, $quantity, $fallback);
     }
 
+    /**
+     * Which Preferred Name meta key to write to: whichever candidate key
+     * currently holds a value, else the primary one.
+     */
+    private static function preferred_name_key_for_item(WC_Order_Item_Product $item): string {
+        foreach (['Preferred Name for Ticket/Badge', 'Preferred Name', 'preferred_name'] as $key) {
+            if (self::meta_values_for_key($item, $key)) {
+                return $key;
+            }
+        }
+        return 'Preferred Name for Ticket/Badge';
+    }
+
+    /**
+     * Admin tool: view/edit the per-seat Preferred Name values for any
+     * order's ticket line item(s). WooCommerce doesn't expose item meta
+     * for editing once an order is paid, so this is the supported way to
+     * fix a wrong or crammed-together name after the fact.
+     */
+    public static function render_ticket_names_page(): void {
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('You do not have permission to do this.');
+        }
+        $notice = isset($_GET['tn_notice']) ? sanitize_key(wp_unslash($_GET['tn_notice'])) : '';
+        $order_id = isset($_GET['order_id']) ? absint($_GET['order_id']) : 0;
+        ?>
+        <div class="wrap">
+            <h1>Ticket Names</h1>
+            <p>Look up an order to view or correct the Preferred Name on each of its tickets. Only the Preferred Name field is touched — nothing else on the order changes.</p>
+            <?php if ($notice === 'saved') : ?>
+                <div class="notice notice-success is-dismissible"><p>Saved.</p></div>
+            <?php elseif ($notice === 'invalid') : ?>
+                <div class="notice notice-error is-dismissible"><p>That could not be saved — the order/item could not be found, or the number of names didn't match the quantity.</p></div>
+            <?php endif; ?>
+            <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>">
+                <input type="hidden" name="page" value="tn-ticket-names">
+                <p>
+                    <label for="tn-order-id">Order ID</label>
+                    <input type="number" id="tn-order-id" name="order_id" value="<?php echo esc_attr($order_id ?: ''); ?>" min="1">
+                    <button type="submit" class="button">Load</button>
+                </p>
+            </form>
+            <?php
+            if ($order_id) {
+                $order = wc_get_order($order_id);
+                if (!$order instanceof WC_Order) {
+                    echo '<p>Order ' . esc_html((string) $order_id) . ' was not found.</p>';
+                } else {
+                    $found = false;
+                    foreach ($order->get_items('line_item') as $item_id => $item) {
+                        if (!$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) continue;
+                        $found = true;
+                        $quantity = max(1, (int) $item->get_quantity());
+                        $names = self::preferred_names_for_item($item, $order, $quantity);
+                        ?>
+                        <div class="postbox" style="padding:16px;max-width:520px;margin-top:16px;">
+                            <h2 style="margin-top:0;">Item #<?php echo esc_html((string) $item_id); ?> — quantity <?php echo esc_html((string) $quantity); ?></h2>
+                            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                                <input type="hidden" name="action" value="tn_save_ticket_names">
+                                <input type="hidden" name="order_id" value="<?php echo esc_attr($order_id); ?>">
+                                <input type="hidden" name="item_id" value="<?php echo esc_attr($item_id); ?>">
+                                <?php wp_nonce_field('tn_save_ticket_names_' . $order_id . '_' . $item_id); ?>
+                                <?php foreach ($names as $i => $name) : ?>
+                                    <p>
+                                        <label for="tn-name-<?php echo esc_attr($i); ?>">Seat <?php echo esc_html((string) ($i + 1)); ?></label><br>
+                                        <input type="text" id="tn-name-<?php echo esc_attr($i); ?>" name="names[]" value="<?php echo esc_attr($name); ?>" class="regular-text">
+                                    </p>
+                                <?php endforeach; ?>
+                                <p><button type="submit" class="button button-primary">Save</button></p>
+                            </form>
+                        </div>
+                        <?php
+                    }
+                    if (!$found) {
+                        echo '<p>No eligible ticket line items found on that order.</p>';
+                    }
+                }
+            }
+            ?>
+        </div>
+        <?php
+    }
+
+    public static function handle_save_ticket_names(): void {
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('You do not have permission to do this.');
+        }
+        $order_id = isset($_POST['order_id']) ? absint($_POST['order_id']) : 0;
+        $item_id = isset($_POST['item_id']) ? absint($_POST['item_id']) : 0;
+        check_admin_referer('tn_save_ticket_names_' . $order_id . '_' . $item_id);
+
+        $redirect = add_query_arg(['page' => 'tn-ticket-names', 'order_id' => $order_id], admin_url('admin.php'));
+
+        $order = wc_get_order($order_id);
+        $item = $order instanceof WC_Order ? $order->get_item($item_id) : false;
+        if (!$order instanceof WC_Order || !$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) {
+            wp_safe_redirect(add_query_arg('tn_notice', 'invalid', $redirect));
+            exit;
+        }
+
+        $quantity = max(1, (int) $item->get_quantity());
+        $names = isset($_POST['names']) ? array_map('sanitize_text_field', (array) wp_unslash($_POST['names'])) : [];
+        $names = array_map('trim', $names);
+        if (count($names) !== $quantity) {
+            wp_safe_redirect(add_query_arg('tn_notice', 'invalid', $redirect));
+            exit;
+        }
+
+        $key = self::preferred_name_key_for_item($item);
+        $item->delete_meta_data($key);
+        foreach ($names as $name) {
+            if ($name === '') continue;
+            $item->add_meta_data($key, $name, false);
+        }
+        $item->save();
+
+        wp_safe_redirect(add_query_arg('tn_notice', 'saved', $redirect));
+        exit;
+    }
+
     private static function ticket_code(int $order_id, int $item_id, int $position): string {
         $digest = strtoupper(hash_hmac('sha256', "{$order_id}:{$item_id}:{$position}", wp_salt('auth')));
         return 'TN26-' . substr($digest, 0, 4) . '-' . substr($digest, 4, 4);
@@ -949,6 +1070,14 @@ JS
             'manage_woocommerce',
             'tn-my-tickets',
             [self::class, 'render_settings_page']
+        );
+        add_submenu_page(
+            'woocommerce',
+            'Ticket Names',
+            'Ticket Names',
+            'manage_woocommerce',
+            'tn-ticket-names',
+            [self::class, 'render_ticket_names_page']
         );
     }
 
