@@ -13,6 +13,18 @@
 - Other WordPress plugins have been deployed through versioned ZIP upload in
   WordPress when FTP was unreliable. Confirm current live version and take a
   recoverable backup before replacement.
+- The `tndeploy` account can also reach other plugins directly as plain files
+  under `plugins/<slug>/`, confirmed 2026-07-28 for
+  `plugins/trivia-nationals-my-tickets/trivia-nationals-my-tickets.php` — no
+  ZIP needed, same fetch/diff/backup/upload/verify discipline as the scoped
+  script, just without a dedicated script yet.
+- This host's FTPS **data channel has intermittently failed on TLS 1.3**
+  with `451 Error during read from data connection` — seen 2026-07-28,
+  *after* a full 55KB file had already been sent, which briefly left the
+  live file empty until re-uploaded. Force `--tlsv1.2 --tls-max 1.2` on both
+  the fetch and the upload `curl` calls; `wp-plugin-ftps.sh` does this by
+  default now. Always keep a fetched pre-upload backup and verify the
+  post-upload hash — don't trust a `curl -T` exit code alone after a `451`.
 
 Never broaden the scoped main-site FTP script without reviewing its remote root
 and rollback behavior.

@@ -72,13 +72,17 @@ ftp_url() {
 fetch_live() {
 	local dest="$1" netrc
 	netrc="$(make_netrc)"
-	curl -sS --ssl-reqd --netrc-file "$netrc" "$(ftp_url)" -o "$dest"
+	# --tlsv1.2 --tls-max 1.2: this host's FTPS data channel has intermittently
+	# aborted TLS 1.3 transfers with "451 Error during read from data
+	# connection" (seen 2026-07-28, mid-transfer on a completed upload).
+	# Forcing 1.2 avoids the server-side bug.
+	curl -sS --ssl-reqd --tlsv1.2 --tls-max 1.2 --netrc-file "$netrc" "$(ftp_url)" -o "$dest"
 }
 
 push_live() {
 	local src="$1" netrc
 	netrc="$(make_netrc)"
-	curl -sS --ssl-reqd --netrc-file "$netrc" -T "$src" "$(ftp_url)"
+	curl -sS --ssl-reqd --tlsv1.2 --tls-max 1.2 --netrc-file "$netrc" -T "$src" "$(ftp_url)"
 }
 
 sha256_of() {

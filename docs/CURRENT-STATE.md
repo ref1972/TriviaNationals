@@ -7,8 +7,20 @@ Last human review: 2026-07-27.
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.
-- My Tickets v0.5.3 provides email magic-link retrieval, printable QR tickets,
-  mobile check-in, a roster, and editable allocated tickets.
+- My Tickets v0.5.4 provides email magic-link retrieval, printable QR tickets,
+  mobile check-in, a roster, editable allocated tickets, and
+  `tn_tickets_attendee_roster()` (a shared ticket-holder list other plugins
+  can build attendee pickers from).
+- Event Schedule Manager v2.1 adds a team roster picker for team-based event
+  signups: an admin "Team Rosters" screen and a captain-facing "Choose Team
+  Members" screen on `/manage-signups/`, so registered ticket holders can be
+  assigned to a team instead of typed as free text, with cross-team exclusion
+  per event. Deployed and hash-verified live on 2026-07-28; not yet
+  live-tested end to end (see docs/HANDOFF.md).
+- Event Schedule Manager also carries a production-only **"All Trivia: The
+  Gathering" waitlist feature** (discovered live on 2026-07-28, now captured
+  in Git for the first time) — signup for that event shows a waiting-list
+  form instead of flight selection once flights are full.
 - The only valid purchased admission product is exactly **Trivia Nationals 2026
   Ticket**, production WooCommerce product ID `18347`.
 - Allocated tickets use the `TN26A-####` number format and participate in ticket
@@ -41,10 +53,6 @@ Last human review: 2026-07-27.
   because doing so would send a real message.
 - Confirm production usage before modifying the separate
   `trivia-nationals-event-schedule/` plugin.
-- A team roster picker for team-based event signups (admin "Team Rosters"
-  screen plus a captain-facing "Choose Team Members" screen on
-  `/manage-signups/`) was written into Event Schedule Manager 2.1 and My
-  Tickets 0.5.4. Source only — not committed, not deployed, not live-tested.
 
 ## Local artifacts excluded from Git
 

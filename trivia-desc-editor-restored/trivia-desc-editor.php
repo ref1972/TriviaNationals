@@ -3044,6 +3044,18 @@ function tn_tde_clean_description_html( $html ) {
 	return $html;
 }
 
+function tn_tde_render_description_html( $html ) {
+	$html = (string) $html;
+	if ( trim( $html ) === '' ) return '';
+	// Rich descriptions already carry their own block structure from the editor;
+	// wpautop() is regex-based and mangles nesting when applied on top of that.
+	// Only auto-paragraph legacy plain-text descriptions that have none.
+	if ( ! preg_match( '/<(p|div|ul|ol|li|br)\b/i', $html ) ) {
+		$html = wpautop( $html );
+	}
+	return wp_kses_post( $html );
+}
+
 function tn_tde_event_detail_slug( $event ) {
 	$title = sanitize_text_field( $event['title'] ?? '' );
 	$slug = sanitize_title( $title );
@@ -3202,7 +3214,7 @@ function tn_tde_signup_event_titles() {
 		'Crossword Challenge',
 		'IQA Individual Championship',
 		'IQA Individual Quiz Championship',
-		'Knock Out Quiz with Steve Perry',
+				'Knock Out Quiz with Steve Perry',
 		'IQA Knock Out Quiz with Steve Perry',
 	];
 }
@@ -3315,6 +3327,17 @@ function tn_tde_signup_flight_dedupe_key( $flight_label ) {
 function tn_tde_signup_flight_options_for_event( $event ) {
 	$base_title = sanitize_text_field( $event['base_title'] ?? $event['title'] ?? '' );
 	if ( $base_title === '' ) return [];
+	if ( tn_tde_signup_is_ttg_event( $event ) ) {
+		$waitlist_label = 'Waiting List - Any Flight';
+		return [ [
+			'value' => $waitlist_label,
+			'label' => $waitlist_label,
+			'flight' => $waitlist_label,
+			'session' => '',
+			'event' => $event,
+			'event_slug' => tn_tde_event_detail_slug( $event ),
+		] ];
+	}
 	$options = [];
 	$ttg_fallback_event = null;
 	$has_available_candidate = false;
@@ -3379,9 +3402,10 @@ function tn_tde_signup_events_for_page() {
 		$key = tn_tde_signup_normalize_title( $title );
 		if ( isset( $choices[ $key ] ) ) continue;
 		$choices[ $key ] = [
-			'title' => $title,
+			'title' => $title . ( tn_tde_signup_is_ttg_event( $event ) ? ' - Waiting List' : '' ),
 			'slug' => tn_tde_event_detail_slug( $event ),
 			'isTeam' => tn_tde_event_is_team_signup( $event ),
+			'isWaitlist' => tn_tde_signup_is_ttg_event( $event ),
 			'flights' => array_map( static function( $option ) {
 				return [
 					'value' => $option['value'],
@@ -3400,21 +3424,26 @@ function tn_tde_render_event_signup_form( $event ) {
 	$flights = tn_tde_signup_flight_options_for_event( $event );
 	$current_flight = sanitize_text_field( $event['session_label'] ?? '' );
 	$is_team_signup = tn_tde_event_is_team_signup( $event );
+	$is_waitlist = tn_tde_signup_is_ttg_event( $event );
 	ob_start();
 	?>
 	<section class="tn-dynamic-event-signup" aria-label="<?php echo esc_attr( $event['base_title'] ?? $event['title'] ?? 'Event' ); ?> signup">
-		<h2>Sign Up</h2>
+		<h2><?php echo $is_waitlist ? 'Join the Waiting List' : 'Sign Up'; ?></h2>
 		<div class="tn-signup-note" role="note">
 			<p><strong>Important:</strong> You must be registered for Trivia Nationals 2026 before signing up for events.</p>
-			<p>You may sign up for only one flight per event.</p>
-			<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
+			<?php if ( $is_waitlist ) : ?>
+				<p><strong>All Trivia: The Gathering flights are currently full.</strong> Submit this form to join the waiting list. This does not guarantee a spot; we will contact you if space becomes available.</p>
+			<?php else : ?>
+				<p>You may sign up for only one flight per event.</p>
+				<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
+			<?php endif; ?>
 		</div>
 		<?php if ( $status === 'success' ) : ?>
 			<div class="tn-signup-success-banner" role="status">
 				<span class="tn-signup-success-check" aria-hidden="true"></span>
 				<div>
-					<strong>You&#8217;re signed up!</strong>
-					<p>Your signup was received. You can check or change your signups anytime from the <a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Event Signups page</a>.</p>
+					<strong><?php echo $is_waitlist ? 'You&#8217;re on the waiting list!' : 'You&#8217;re signed up!'; ?></strong>
+					<p><?php echo $is_waitlist ? 'We will contact you if space becomes available. This waiting-list entry does not guarantee a spot.' : 'Your signup was received.'; ?> You can check or change your signups anytime from the <a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Event Signups page</a>.</p>
 				</div>
 			</div>
 		<?php elseif ( in_array( $status, [ 'invalid', 'closed', 'missing', 'spam', 'error' ], true ) ) : ?>
@@ -3433,7 +3462,9 @@ function tn_tde_render_event_signup_form( $event ) {
 				<label for="tn_signup_email">Contact Email *</label>
 				<input type="email" id="tn_signup_email" name="tn_signup_email" required autocomplete="email">
 			</p>
-			<?php if ( $flights ) : ?>
+			<?php if ( $is_waitlist && $flights ) : ?>
+				<input type="hidden" name="tn_signup_flight" value="<?php echo esc_attr( $flights[0]['value'] ); ?>">
+			<?php elseif ( $flights ) : ?>
 				<p>
 					<label for="tn_signup_flight">Flight *</label>
 					<select id="tn_signup_flight" name="tn_signup_flight" required>
@@ -3469,7 +3500,7 @@ function tn_tde_render_event_signup_form( $event ) {
 				<input type="text" id="tn_signup_referrer_check" name="tn_signup_referrer_check" tabindex="-1" autocomplete="new-password">
 			</p>
 			<p class="is-full">
-				<button type="submit" data-tn-saving-label="Submitting...">Submit Signup</button>
+				<button type="submit" data-tn-saving-label="<?php echo $is_waitlist ? 'Joining Waiting List...' : 'Submitting...'; ?>"><?php echo $is_waitlist ? 'Join Waiting List' : 'Submit Signup'; ?></button>
 			</p>
 		</form>
 	</section>
@@ -5708,11 +5739,12 @@ function tn_tde_render_signup_page() {
 				var teamWrap = row.querySelector('[data-tn-team-wrap]');
 				var event = eventBySlug(select.value);
 				flightSelect.innerHTML = '';
-				flightSelect.appendChild(option('Select a flight', ''));
+				flightSelect.appendChild(option(event && event.isWaitlist ? 'Waiting List' : 'Select a flight', ''));
 				if (event && event.flights && event.flights.length) {
 					event.flights.forEach(function(flight) {
 						flightSelect.appendChild(option(flight.label, flight.value));
 					});
+					if (event.isWaitlist && event.flights.length === 1) flightSelect.value = event.flights[0].value;
 					flightSelect.required = true;
 					flightWrap.hidden = false;
 				} else {
@@ -6670,7 +6702,7 @@ function tn_tde_render_dynamic_event_detail_page( $event ) {
 		<main class="tn-dynamic-event-main">
 			<article class="tn-dynamic-event-content">
 				<h2>About This Event</h2>
-				<?php echo wpautop( $description ); ?>
+				<?php echo tn_tde_render_description_html( $description ); ?>
 				<?php echo tn_tde_render_event_signup_form( $event ); ?>
 			</article>
 			<aside class="tn-dynamic-event-card">
@@ -7100,7 +7132,7 @@ function tn_tde_render_full_schedule_shortcode() {
 								'category' => $event_type_label( $event ),
 								'eventType' => $event['event_type'],
 								'eventTypeColor' => $event['event_type_color'],
-								'description' => wpautop( $event['description'] ),
+								'description' => tn_tde_render_description_html( $event['description'] ),
 								'image' => $event['image'],
 								'imageAlt' => $event['image_alt'] ?: $event['title'],
 								'infoUrl' => $event['info_url'],
@@ -7136,7 +7168,7 @@ function tn_tde_render_full_schedule_shortcode() {
 										'category' => $event_type_label( $event ),
 										'eventType' => $event['event_type'],
 										'eventTypeColor' => $event['event_type_color'],
-										'description' => wpautop( $event['description'] ),
+										'description' => tn_tde_render_description_html( $event['description'] ),
 										'image' => $event['image'],
 										'imageAlt' => $event['image_alt'] ?: $event['title'],
 										'infoUrl' => $event['info_url'],
@@ -7170,7 +7202,7 @@ function tn_tde_render_full_schedule_shortcode() {
 									'category' => $event_type_label( $event ),
 									'eventType' => $event['event_type'],
 									'eventTypeColor' => $event['event_type_color'],
-									'description' => wpautop( $event['description'] ),
+									'description' => tn_tde_render_description_html( $event['description'] ),
 									'image' => $event['image'],
 									'imageAlt' => $event['image_alt'] ?: $event['title'],
 									'infoUrl' => $event['info_url'],

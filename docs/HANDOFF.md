@@ -21,17 +21,37 @@ Last updated: 2026-07-28.
   `scripts/project-checkpoint.sh --check` — passed cleanly with the local tree
   already matching `origin/main` at `8bc6ab4`. Confirms the shared-memory
   handoff round-trips correctly between Codex and Claude on this machine.
-- 2026-07-28: Wrote (not yet committed/deployed) a team roster picker for
+- 2026-07-28: Built and **deployed to production** a team roster picker for
   team-based event signups: a filterable checkbox list of registered ticket
   holders, usable by both a WP admin ("Team Rosters" submenu under
   `trivia-desc-editor`) and the registering team captain (a "Choose Team
   Members" button on their `/manage-signups/` card, opening a dedicated
   picker screen on the same route). Once someone is assigned to a team for an
-  event, they're greyed out for every other team in that event. Added
-  `tn_tickets_attendee_roster()` to My Tickets (0.5.4) as the shared source of
-  truth for ticket holders, and the picker/assignment logic to Event Schedule
-  Manager (2.1). `php -l` passes on both files; not yet run against a live
-  WordPress/WooCommerce site.
+  event, they're greyed out for every other team in that event. Shipped as
+  `tn_tickets_attendee_roster()` in My Tickets (now live at 0.5.4) plus the
+  picker/assignment logic in Event Schedule Manager (now live at 2.1). Both
+  deploys were hash-verified against the live files after upload.
+- 2026-07-28: Before deploying the Event Schedule Manager change, a fresh
+  `diff` against production found real drift never captured in Git: the
+  "All Trivia: The Gathering" waitlist feature (`isWaitlist`,
+  `tn_tde_signup_is_ttg_event()`, waitlist-specific flight/button copy) and a
+  richer `tn_tde_render_description_html()` helper both exist live but were
+  never pulled back. Reconciled by pulling live as the base, isolating the
+  roster-picker patch via `git diff` against the pre-work commit, and
+  reapplying just that patch (it applied with zero fuzz — confirms the
+  feature never touched the drifted code) before deploying. Git now matches
+  production for this file, including the previously-undocumented waitlist
+  feature.
+- 2026-07-28 incident (resolved): the first FTP upload attempt for
+  `trivia-nationals-my-tickets.php` failed with `451 Error during read from
+  data connection` **after** the full file was sent, leaving the live file
+  **empty** for a few minutes (My Tickets fully down: ticket retrieval,
+  check-in scanner, allocated tickets). Root cause: this host's FTPS data
+  channel intermittently mishandles TLS 1.3 (seen negotiated in the failing
+  transfer); forcing `--tlsv1.2 --tls-max 1.2` fixed it immediately. Restored
+  the pre-incident content from a local backup taken seconds earlier, then
+  redeployed the feature version — both hash-verified. `scripts/wp-plugin-ftps.sh`
+  now forces TLS 1.2 on both `fetch_live`/`push_live` to prevent a repeat.
 
 ## Immediate next steps
 
@@ -41,11 +61,13 @@ Last updated: 2026-07-28.
 - Scope the real scoring system before replacing the static placeholder.
 - Complete the coordinated `SYNC_SECRET` rotation (see Known cautions) before
   deploying the updated Event Signups Apps Script.
-- Deploy and live-test the new team roster picker (Event Schedule Manager
-  2.1 + My Tickets 0.5.4) before relying on it: verify the admin "Team
-  Rosters" screen, the captain "Choose Team Members" flow end to end
-  (including the confirmation email), and the cross-team exclusion with two
-  real team signups on the same event.
+- Live-test the deployed team roster picker end to end: the admin "Team
+  Rosters" screen, the captain "Choose Team Members" flow (including the
+  confirmation email), and the cross-team exclusion with two real team
+  signups on the same event.
+- Watch for any recurrence of the `451`/TLS 1.3 FTP data-connection issue on
+  future deploys, now that `wp-plugin-ftps.sh` forces TLS 1.2 — if it still
+  recurs, the cause isn't (only) TLS version and needs more digging.
 
 ## Known cautions
 
