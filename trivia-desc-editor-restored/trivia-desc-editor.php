@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 2.1
+ * Version: 2.2
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -8085,11 +8085,35 @@ function tn_tde_team_signup_admin_rows() {
 	return $groups;
 }
 
+/**
+ * "{team name or 'Unnamed team'} ({assigned count})" — used for the team
+ * dropdown option text and the panel header on the Team Rosters admin page.
+ */
+function tn_tde_team_roster_admin_label( $signup_id ) {
+	$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
+	$count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
+	return sprintf( '%s (%d)', $team_name !== '' ? $team_name : 'Unnamed team', $count );
+}
+
 function tn_tde_team_rosters_page() {
 	if ( ! current_user_can( 'edit_pages' ) ) wp_die( 'You do not have permission to manage team rosters.' );
 	$notice = isset( $_GET['tn_roster_notice'] ) ? sanitize_key( wp_unslash( $_GET['tn_roster_notice'] ) ) : '';
 	$conflicts = isset( $_GET['tn_roster_conflicts'] ) ? sanitize_text_field( wp_unslash( $_GET['tn_roster_conflicts'] ) ) : '';
 	$groups = tn_tde_team_signup_admin_rows();
+
+	$requested_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
+	$selected_id = 0;
+	$selected_event_title = '';
+	foreach ( $groups as $event_title => $signup_ids ) {
+		if ( ! $selected_id ) {
+			$selected_event_title = $event_title;
+			$selected_id = $signup_ids[0];
+		}
+		if ( $requested_id && in_array( $requested_id, $signup_ids, true ) ) {
+			$selected_event_title = $event_title;
+			$selected_id = $requested_id;
+		}
+	}
 	?>
 	<div class="wrap">
 		<h1>Team Rosters</h1>
@@ -8101,26 +8125,49 @@ function tn_tde_team_rosters_page() {
 		<?php endif; ?>
 		<?php if ( ! $groups ) : ?>
 			<p>No active team signups yet.</p>
-		<?php endif; ?>
-		<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
-			<h2><?php echo esc_html( $event_title ?: 'Untitled event' ); ?></h2>
-			<?php foreach ( $signup_ids as $signup_id ) :
-				$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
-				$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
-				$pool = tn_tde_team_roster_pool( $event_title, $signup_id );
-				?>
-				<div class="postbox" style="padding:16px;margin-bottom:16px;max-width:720px;">
-					<h3 style="margin-top:0;"><?php echo esc_html( $team_name ?: 'Unnamed team' ); ?> <small style="font-weight:normal;color:#646970;">(captain: <?php echo esc_html( $captain ); ?>)</small></h3>
-					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-						<input type="hidden" name="action" value="tn_tde_admin_save_team_roster">
-						<input type="hidden" name="signup_id" value="<?php echo esc_attr( $signup_id ); ?>">
-						<?php wp_nonce_field( 'tn_tde_admin_save_team_roster_' . $signup_id, 'tn_tde_admin_roster_nonce' ); ?>
-						<?php tn_tde_render_team_roster_picker( $signup_id, $pool ); ?>
-						<p><button type="submit" class="button button-primary">Save Roster</button></p>
+		<?php else : ?>
+			<div class="tn-team-roster-layout">
+				<div class="tn-team-roster-select">
+					<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
+						<input type="hidden" name="page" value="tn-team-rosters">
+						<label for="tn-team-roster-signup-id"><strong>Team</strong></label>
+						<select id="tn-team-roster-signup-id" name="signup_id" onchange="this.form.submit()">
+							<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
+								<optgroup label="<?php echo esc_attr( $event_title ?: 'Untitled event' ); ?>">
+									<?php foreach ( $signup_ids as $signup_id ) : ?>
+										<option value="<?php echo esc_attr( $signup_id ); ?>" <?php selected( $signup_id, $selected_id ); ?>><?php echo esc_html( tn_tde_team_roster_admin_label( $signup_id ) ); ?></option>
+									<?php endforeach; ?>
+								</optgroup>
+							<?php endforeach; ?>
+						</select>
+						<noscript><p><button type="submit" class="button">Go</button></p></noscript>
 					</form>
 				</div>
-			<?php endforeach; ?>
-		<?php endforeach; ?>
+				<div class="tn-team-roster-panel">
+					<?php
+					$captain = tn_tde_signup_meta_value( $selected_id, 'name' );
+					$pool = tn_tde_team_roster_pool( $selected_event_title, $selected_id );
+					?>
+					<div class="postbox" style="padding:16px;max-width:720px;">
+						<h2 style="margin-top:0;"><?php echo esc_html( tn_tde_team_roster_admin_label( $selected_id ) ); ?> <small style="font-weight:normal;color:#646970;">(captain: <?php echo esc_html( $captain ?: 'unknown' ); ?>)</small></h2>
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+							<input type="hidden" name="action" value="tn_tde_admin_save_team_roster">
+							<input type="hidden" name="signup_id" value="<?php echo esc_attr( $selected_id ); ?>">
+							<?php wp_nonce_field( 'tn_tde_admin_save_team_roster_' . $selected_id, 'tn_tde_admin_roster_nonce' ); ?>
+							<?php tn_tde_render_team_roster_picker( $selected_id, $pool ); ?>
+							<p><button type="submit" class="button button-primary">Save Roster</button></p>
+						</form>
+					</div>
+				</div>
+			</div>
+			<style>
+				.tn-team-roster-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; max-width: 1020px; }
+				.tn-team-roster-select select { width: 100%; }
+				@media (max-width: 782px) {
+					.tn-team-roster-layout { grid-template-columns: 1fr; }
+				}
+			</style>
+		<?php endif; ?>
 	</div>
 	<?php
 }
@@ -8133,6 +8180,7 @@ add_action( 'admin_post_tn_tde_admin_save_team_roster', function() {
 	$result = tn_tde_handle_team_roster_save( $signup_id, $posted_ids );
 	wp_safe_redirect( add_query_arg( [
 		'page' => 'tn-team-rosters',
+		'signup_id' => $signup_id,
 		'tn_roster_notice' => $result['ok'] ? 'saved' : 'error',
 		'tn_roster_conflicts' => implode( '; ', $result['conflicts'] ),
 	], admin_url( 'admin.php' ) ) );

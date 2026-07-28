@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.5.4
+ * Version: 0.5.5
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -247,7 +247,6 @@ JS
             foreach ($orders as $order) {
                 if (!$order instanceof WC_Order || !$order->is_paid() || in_array($order->get_status(), ['cancelled', 'refunded', 'failed'], true)) continue;
                 $email = strtolower(trim($order->get_billing_email()));
-                $registered_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
                 foreach ($order->get_items('line_item') as $item_id => $item) {
                     if (!$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) continue;
                     $quantity = max(1, (int) $item->get_quantity());
@@ -255,7 +254,7 @@ JS
                     for ($position = 1; $position <= $quantity; $position++) {
                         $roster[] = [
                             'id' => 'wc:' . $order->get_id() . ':' . $item_id . ':' . $position,
-                            'name' => $registered_name !== '' ? $registered_name : $preferred_name,
+                            'name' => $preferred_name,
                             'preferred_name' => $preferred_name,
                             'email' => $email,
                         ];
