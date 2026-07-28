@@ -96,6 +96,34 @@ Last updated: 2026-07-28.
     `attendee_roster()` — all 9 current allocated-ticket holders appear in
     the Team Rosters picker (203 total rows). No code change was needed
     for this; it was a verification, not a bug.
+- 2026-07-28: added a reusable **"Ticket Names"** admin screen (My Tickets,
+  under the WooCommerce menu) — look up any order by ID, see each ticket
+  seat's current Preferred Name, edit and save (only that meta key is
+  touched). Replaces one-off scripts for future cases like order 19505.
+  Used it to fix order 18490 (Michael Conrad → Dave Legler), confirmed
+  live. Also confirmed WooCommerce's own Edit Order → Billing → Email
+  address field is already natively editable — no new code needed for
+  changing an order's billing email (it's per-order, not per-seat; the
+  user confirmed per-order is sufficient).
+- 2026-07-28: diagnosed (not a bug, confirmed intentional) why a
+  "Semi-Finals" Quiz Bowl team showed 0 players despite its captain
+  clearly having assigned herself somewhere — she has two separate Quiz
+  Bowl signups (different flights) and assigned her seat to the *other*
+  one. Cross-team exclusion is scoped by base event title, not by flight,
+  so the same person can't be on two flight-rosters of the same event —
+  user confirmed this is the desired behavior. Cancelled the redundant
+  Semi-Finals signup via the existing admin "Cancel signup" row action (no
+  code needed).
+- 2026-07-28: three more Team Rosters upgrades, all in Event Schedule
+  Manager (now v2.4), deployed and verified live: (1) an editable **Team
+  Name** field on the admin roster panel; (2) an **"Export All Rosters
+  (CSV)"** link (`Event, Team Name, Captain, Player Name` columns, one
+  combined file); (3) a **public `/team-rosters/` page** listing every
+  team event's teams, captains, and player names (confirmed via automated
+  scan: zero email addresses in the page source). Also ran a one-time data
+  update — 29 solo (1-player) teams got their name prefixed with "FA: "
+  (blank ones became "FA: {captain name}") via a temporary admin action,
+  applied, confirmed live, then removed from source.
 
 ## Immediate next steps
 

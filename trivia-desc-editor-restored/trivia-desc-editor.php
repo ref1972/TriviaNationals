@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 2.2
+ * Version: 2.4
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -5804,6 +5804,247 @@ function tn_tde_render_signup_page() {
 	get_footer();
 }
 
+// ─── Public Team Rosters page ────────────────────────────────────────────
+
+function tn_tde_is_team_rosters_page_request() {
+	if ( is_admin() ) return false;
+	$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ), '/' );
+	return strtolower( $path ) === 'team-rosters';
+}
+
+add_action( 'wp', function() {
+	if ( ! tn_tde_is_team_rosters_page_request() ) return;
+	global $wp_query;
+	$wp_query->is_404 = false;
+	$wp_query->is_page = true;
+	$wp_query->is_singular = true;
+	status_header( 200 );
+} );
+
+add_filter( 'document_title_parts', function( $parts ) {
+	if ( tn_tde_is_team_rosters_page_request() ) {
+		$parts['title'] = 'Team Rosters';
+	}
+	return $parts;
+} );
+
+add_filter( 'body_class', function( $classes ) {
+	if ( ! tn_tde_is_team_rosters_page_request() ) return $classes;
+	$classes = array_diff( $classes, [ 'error404' ] );
+	$classes[] = 'tn-team-rosters-page';
+	return array_values( array_unique( $classes ) );
+} );
+
+add_action( 'template_redirect', function() {
+	if ( ! tn_tde_is_team_rosters_page_request() ) return;
+	status_header( 200 );
+	nocache_headers();
+	tn_tde_render_public_team_rosters_page();
+	exit;
+}, 2 );
+
+function tn_tde_render_public_team_rosters_page() {
+	$groups = tn_tde_team_signup_admin_rows();
+	get_header();
+	?>
+	<main class="tn-signup-page">
+		<style>
+			body.tn-team-rosters-page .inner-main-title,
+			body.tn-team-rosters-page .entry-header,
+			body.tn-team-rosters-page .page-header {
+				display: none !important;
+			}
+			body.tn-team-rosters-page .site-content,
+			body.tn-team-rosters-page .content-area,
+			body.tn-team-rosters-page .site-main,
+			body.tn-team-rosters-page .entry-content {
+				margin: 0 !important;
+				max-width: none !important;
+				padding: 0 !important;
+				width: 100% !important;
+			}
+			.tn-signup-page {
+				--tn-grid-bg: #0a0a14;
+				--tn-grid-panel: rgba(18,20,34,0.82);
+				--tn-grid-panel-strong: rgba(25,29,48,0.94);
+				--tn-grid-line: rgba(255,255,255,0.16);
+				--tn-grid-text: #f0f0f5;
+				--tn-grid-muted: #b7bdcf;
+				--tn-grid-cyan: #00e6ff;
+				--tn-grid-pink: #ff3ea5;
+				--tn-grid-gold: #ffd166;
+				color: var(--tn-grid-text);
+				background:
+					radial-gradient(circle at 18% 7%, rgba(0,230,255,0.18), transparent 24rem),
+					radial-gradient(circle at 82% 0%, rgba(255,62,165,0.16), transparent 25rem),
+					linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0)),
+					var(--tn-grid-bg);
+				font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				margin-left: calc(50% - 50vw);
+				margin-right: calc(50% - 50vw);
+				max-width: none;
+				min-height: 100vh;
+				padding: clamp(2.5rem, 7vw, 6rem) clamp(1rem, 4vw, 4rem) clamp(2.5rem, 6vw, 5rem);
+				width: 100vw;
+			}
+			.tn-signup-page > * {
+				margin: 0 auto;
+				max-width: 1320px;
+			}
+			.tn-signup-nav {
+				align-items: center;
+				display: flex;
+				gap: 1rem;
+				justify-content: space-between;
+				margin-bottom: clamp(1.4rem, 3vw, 2.6rem);
+			}
+			.tn-signup-brand {
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1rem, 1.5vw, 1.35rem);
+				font-weight: 900;
+				line-height: 1;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav {
+				align-items: center;
+				display: flex;
+				flex-wrap: wrap;
+				gap: clamp(0.75rem, 2vw, 1.5rem);
+				justify-content: flex-end;
+			}
+			.tn-signup-nav nav a {
+				color: var(--tn-grid-muted);
+				font-size: 0.84rem;
+				font-weight: 800;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-signup-nav nav a:hover,
+			.tn-signup-nav nav a[aria-current="page"] {
+				color: var(--tn-grid-cyan);
+			}
+			.tn-signup-page-inner {
+				width: min(980px, 100%);
+			}
+			.tn-signup-page h1 {
+				margin: 0 0 0.65rem;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(2.6rem, 6vw, 5.2rem);
+				font-weight: 900;
+				letter-spacing: 0;
+				line-height: 0.9;
+				text-transform: uppercase;
+			}
+			.tn-signup-kicker {
+				color: var(--tn-grid-cyan);
+				font-size: clamp(0.8rem, 1.2vw, 1rem);
+				font-weight: 900;
+				letter-spacing: 0.12em;
+				margin: 0 0 0.55rem;
+				text-transform: uppercase;
+			}
+			.tn-signup-page-intro {
+				max-width: 46rem;
+				margin: 0 0 1.6rem;
+				color: var(--tn-grid-muted);
+				font-size: 1.05rem;
+				line-height: 1.6;
+			}
+			.tn-roster-public-event {
+				margin: 0 0 0.9rem;
+				color: var(--tn-grid-cyan);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: clamp(1.4rem, 2.8vw, 2rem);
+				font-weight: 900;
+				letter-spacing: 0.02em;
+				text-transform: uppercase;
+			}
+			.tn-roster-public-event:not(:first-of-type) {
+				margin-top: 2.4rem;
+			}
+			.tn-roster-public-teams {
+				display: grid;
+				gap: 0.9rem;
+				margin: 0 0 1.2rem;
+			}
+			.tn-roster-public-team {
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 8px;
+				background: var(--tn-grid-panel);
+				padding: 1rem 1.2rem;
+			}
+			.tn-roster-public-team h3 {
+				margin: 0 0 0.4rem;
+				color: var(--tn-grid-text);
+				font-family: Outfit, Inter, sans-serif;
+				font-size: 1.15rem;
+				font-weight: 800;
+				text-transform: none;
+			}
+			.tn-roster-public-team .tn-roster-public-meta {
+				color: var(--tn-grid-muted);
+				font-size: 0.85rem;
+				margin: 0 0 0.6rem;
+			}
+			.tn-roster-public-team .tn-roster-public-players {
+				color: var(--tn-grid-text);
+				font-size: 0.95rem;
+				line-height: 1.6;
+				margin: 0;
+			}
+			@media (max-width: 720px) {
+				.tn-signup-nav {
+					flex-direction: column;
+					align-items: flex-start;
+				}
+			}
+		</style>
+		<div class="tn-signup-nav">
+			<a class="tn-signup-brand" href="<?php echo esc_url( home_url( '/' ) ); ?>">Trivia Nationals 2026</a>
+			<nav aria-label="Team rosters page navigation">
+				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">Home</a>
+				<a href="<?php echo esc_url( home_url( '/full-schedule/' ) ); ?>">Full Schedule</a>
+				<a href="<?php echo esc_url( home_url( '/event-signups/' ) ); ?>">Signups</a>
+				<a href="<?php echo esc_url( home_url( '/team-rosters/' ) ); ?>" aria-current="page">Team Rosters</a>
+			</nav>
+		</div>
+		<div class="tn-signup-page-inner">
+			<p class="tn-signup-kicker">August 7 - 9, 2026 / Las Vegas</p>
+			<h1>Team Rosters</h1>
+			<?php if ( ! $groups ) : ?>
+				<p class="tn-signup-page-intro">Team rosters haven&#8217;t been posted yet — check back soon.</p>
+			<?php else : ?>
+				<p class="tn-signup-page-intro">Team lineups for every team-based event. Didn&#8217;t make a roster yet? Contact your team captain.</p>
+				<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
+					<h2 class="tn-roster-public-event"><?php echo esc_html( $event_title ?: 'Untitled event' ); ?></h2>
+					<div class="tn-roster-public-teams">
+						<?php foreach ( $signup_ids as $signup_id ) :
+							$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
+							$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
+							$assigned_ids = tn_tde_signup_assigned_player_ids( $signup_id );
+							$names = [];
+							foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
+								if ( in_array( $person['id'], $assigned_ids, true ) ) $names[] = $person['name'];
+							}
+							?>
+							<div class="tn-roster-public-team">
+								<h3><?php echo esc_html( $team_name ?: 'Unnamed team' ); ?></h3>
+								<p class="tn-roster-public-meta">Captain: <?php echo esc_html( $captain ?: 'unknown' ); ?> &middot; <?php echo esc_html( (string) count( $names ) ); ?> player<?php echo count( $names ) === 1 ? '' : 's'; ?></p>
+								<p class="tn-roster-public-players"><?php echo $names ? esc_html( implode( ', ', $names ) ) : 'Roster forming'; ?></p>
+							</div>
+						<?php endforeach; ?>
+					</div>
+				<?php endforeach; ?>
+			<?php endif; ?>
+		</div>
+	</main>
+	<?php
+	get_footer();
+}
+
 function tn_tde_queue_event_signup_sync( $signup_id ) {
 	if ( function_exists( 'as_enqueue_async_action' ) ) {
 		as_enqueue_async_action( 'tn_tde_sync_event_signup', [ $signup_id ], 'tn-event-signups', true );
@@ -8118,6 +8359,9 @@ function tn_tde_team_rosters_page() {
 	<div class="wrap">
 		<h1>Team Rosters</h1>
 		<p>Assign registered ticket holders to each team. Once someone is assigned to a team for an event, they&#8217;re removed from the pool for every other team in that event.</p>
+		<p>
+			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=tn_tde_export_team_rosters_csv' ), 'tn_tde_export_team_rosters_csv' ) ); ?>">Export All Rosters (CSV)</a>
+		</p>
 		<?php if ( $notice === 'saved' ) : ?>
 			<div class="notice notice-success is-dismissible"><p>Roster saved.<?php echo $conflicts ? ' Skipped (already claimed): ' . esc_html( $conflicts ) : ''; ?></p></div>
 		<?php elseif ( $notice === 'error' ) : ?>
@@ -8146,6 +8390,7 @@ function tn_tde_team_rosters_page() {
 				<div class="tn-team-roster-panel">
 					<?php
 					$captain = tn_tde_signup_meta_value( $selected_id, 'name' );
+					$team_name = tn_tde_signup_meta_value( $selected_id, 'team' );
 					$pool = tn_tde_team_roster_pool( $selected_event_title, $selected_id );
 					?>
 					<div class="postbox" style="padding:16px;max-width:720px;">
@@ -8154,6 +8399,10 @@ function tn_tde_team_rosters_page() {
 							<input type="hidden" name="action" value="tn_tde_admin_save_team_roster">
 							<input type="hidden" name="signup_id" value="<?php echo esc_attr( $selected_id ); ?>">
 							<?php wp_nonce_field( 'tn_tde_admin_save_team_roster_' . $selected_id, 'tn_tde_admin_roster_nonce' ); ?>
+							<p>
+								<label for="tn-team-roster-name"><strong>Team Name</strong></label><br>
+								<input type="text" id="tn-team-roster-name" name="team_name" value="<?php echo esc_attr( $team_name ); ?>" class="regular-text" placeholder="Unnamed team">
+							</p>
 							<?php tn_tde_render_team_roster_picker( $selected_id, $pool ); ?>
 							<p><button type="submit" class="button button-primary">Save Roster</button></p>
 						</form>
@@ -8176,6 +8425,9 @@ add_action( 'admin_post_tn_tde_admin_save_team_roster', function() {
 	if ( ! current_user_can( 'edit_pages' ) ) wp_die( 'You do not have permission to manage team rosters.' );
 	$signup_id = isset( $_POST['signup_id'] ) ? absint( $_POST['signup_id'] ) : 0;
 	check_admin_referer( 'tn_tde_admin_save_team_roster_' . $signup_id, 'tn_tde_admin_roster_nonce' );
+	if ( isset( $_POST['team_name'] ) ) {
+		update_post_meta( $signup_id, '_tn_tde_signup_team', sanitize_text_field( wp_unslash( $_POST['team_name'] ) ) );
+	}
 	$posted_ids = isset( $_POST['tn_roster_players'] ) ? (array) wp_unslash( $_POST['tn_roster_players'] ) : [];
 	$result = tn_tde_handle_team_roster_save( $signup_id, $posted_ids );
 	wp_safe_redirect( add_query_arg( [
@@ -8184,6 +8436,38 @@ add_action( 'admin_post_tn_tde_admin_save_team_roster', function() {
 		'tn_roster_notice' => $result['ok'] ? 'saved' : 'error',
 		'tn_roster_conflicts' => implode( '; ', $result['conflicts'] ),
 	], admin_url( 'admin.php' ) ) );
+	exit;
+} );
+
+add_action( 'admin_post_tn_tde_export_team_rosters_csv', function() {
+	if ( ! current_user_can( 'edit_pages' ) ) wp_die( 'You do not have permission to do this.' );
+	check_admin_referer( 'tn_tde_export_team_rosters_csv' );
+
+	nocache_headers();
+	header( 'Content-Type: text/csv; charset=utf-8' );
+	header( 'Content-Disposition: attachment; filename="team-rosters-' . gmdate( 'Y-m-d' ) . '.csv"' );
+
+	$out = fopen( 'php://output', 'w' );
+	fputcsv( $out, [ 'Event', 'Team Name', 'Captain', 'Player Name' ] );
+	foreach ( tn_tde_team_signup_admin_rows() as $event_title => $signup_ids ) {
+		foreach ( $signup_ids as $signup_id ) {
+			$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
+			$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
+			$assigned_ids = tn_tde_signup_assigned_player_ids( $signup_id );
+			$names = [];
+			foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
+				if ( in_array( $person['id'], $assigned_ids, true ) ) $names[] = $person['name'];
+			}
+			if ( ! $names ) {
+				fputcsv( $out, [ $event_title, $team_name ?: 'Unnamed team', $captain, '' ] );
+			} else {
+				foreach ( $names as $name ) {
+					fputcsv( $out, [ $event_title, $team_name ?: 'Unnamed team', $captain, $name ] );
+				}
+			}
+		}
+	}
+	fclose( $out );
 	exit;
 } );
 

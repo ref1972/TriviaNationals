@@ -14,16 +14,22 @@ Last human review: 2026-07-27.
   resolves one Preferred Name per seat on multi-quantity ticket orders
   (was previously one shared name per line item) — confirmed live against
   a real order.
-- Event Schedule Manager v2.2 adds a team roster picker for team-based event
+- Event Schedule Manager v2.4 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
-  event with a player count, driving one shared picker panel) and a
-  captain-facing "Choose Team Members" screen on `/manage-signups/`, so
-  registered ticket holders can be assigned to a team instead of typed as
-  free text, with cross-team exclusion per event. Deployed and
-  hash-verified live on 2026-07-28. The admin screen and roster contents
-  (including allocated tickets, confirmed live) are verified working; the
-  captain-facing flow is not yet live-tested end to end (see
-  docs/HANDOFF.md).
+  event with a player count and an editable Team Name field, driving one
+  shared picker panel), a "Export All Rosters (CSV)" download, a public
+  `/team-rosters/` page listing every team event's teams/captains/players
+  (no emails), and a captain-facing "Choose Team Members" screen on
+  `/manage-signups/`, so registered ticket holders can be assigned to a
+  team instead of typed as free text, with cross-team exclusion per event
+  (scoped per base event title, not per flight — confirmed intentional).
+  Deployed and hash-verified live on 2026-07-28. The admin screen, roster
+  contents (including allocated tickets), CSV export, and the public page
+  are all verified working live; the captain-facing "Choose Team Members"
+  flow is not yet live-tested end to end (see docs/HANDOFF.md).
+- 29 solo (1-player) teams had their team name one-time-prefixed with
+  "FA: " (blank names got "FA: {captain name}") via a temporary admin
+  action, applied and confirmed live 2026-07-28, then removed from source.
 - Event Schedule Manager also carries a production-only **"All Trivia: The
   Gathering" waitlist feature** (discovered live on 2026-07-28, now captured
   in Git for the first time) — signup for that event shows a waiting-list
