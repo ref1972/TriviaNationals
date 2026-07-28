@@ -7,18 +7,22 @@ Last human review: 2026-07-27.
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.
-- My Tickets v0.5.5 provides email magic-link retrieval, printable QR tickets,
+- My Tickets v0.5.8 provides email magic-link retrieval, printable QR tickets,
   mobile check-in, a roster, editable allocated tickets, and
   `tn_tickets_attendee_roster()` (a shared ticket-holder list other plugins
-  can build attendee pickers from) — its `name` field now prefers the
-  per-seat Preferred Name over the order's shared billing name.
+  can build attendee pickers from). `preferred_names_for_item()` now
+  resolves one Preferred Name per seat on multi-quantity ticket orders
+  (was previously one shared name per line item) — confirmed live against
+  a real order.
 - Event Schedule Manager v2.2 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
   event with a player count, driving one shared picker panel) and a
   captain-facing "Choose Team Members" screen on `/manage-signups/`, so
   registered ticket holders can be assigned to a team instead of typed as
   free text, with cross-team exclusion per event. Deployed and
-  hash-verified live on 2026-07-28; not yet live-tested end to end (see
+  hash-verified live on 2026-07-28. The admin screen and roster contents
+  (including allocated tickets, confirmed live) are verified working; the
+  captain-facing flow is not yet live-tested end to end (see
   docs/HANDOFF.md).
 - Event Schedule Manager also carries a production-only **"All Trivia: The
   Gathering" waitlist feature** (discovered live on 2026-07-28, now captured

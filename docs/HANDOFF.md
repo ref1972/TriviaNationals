@@ -65,6 +65,37 @@ Last updated: 2026-07-28.
   Tickets is now live at **0.5.5**, Event Schedule Manager at **2.2**, both
   hash-verified. Pre-deploy drift check on both files found no unexpected
   production changes this time.
+- 2026-07-28: the duplicate-name symptom turned out to be a real, deeper
+  bug the 0.5.5 fix hadn't fully addressed: `preferred_name($item, $order)`
+  used `get_meta($key, true)`, which only ever returns the *first* value
+  for a meta key — so every seat on a quantity>1 line item still shared
+  one name, at all 4 call sites (roster, check-in roster, printable/QR
+  tickets, QR-scan validation), not just the roster picker. Replaced with
+  `preferred_names_for_item()`, which reads *all* values per key
+  (`get_meta($key, false)`) and assigns one per seat. Also added, used
+  once, then removed a temporary admin action to split a real order
+  (19505, bought as one quantity-2 line item with both names crammed into
+  one field as `"Will Webster/Britton Webster"`) into two distinct
+  per-seat values — confirmed live via browser automation: the order now
+  shows two separate `Preferred Name for Ticket/Badge` entries, and both
+  "Will Webster" and "Britton Webster" now appear as separate, individually
+  selectable rows in the Team Rosters picker. My Tickets is now live at
+  **0.5.8**.
+  - Two bugs surfaced and were fixed mid-rollout: `get_meta($key, false)`
+    returns an array of `WC_Meta_Data` **objects**, not raw values —
+    casting one directly to string fatals, which is what caused the
+    Team Rosters "critical error" the user hit; and the one-off fix's
+    button was a `<button type="submit">` inside a nested `<form>`,
+    which WordPress's Edit Order screen already wraps in its own `<form>`
+    — nested forms get silently dropped by the browser, so the button did
+    nothing on the first click. Fixed by using a plain nonce'd `<a>` link
+    instead (the same pattern `tn_tde_signup_status_action_url()` already
+    uses in `trivia-desc-editor.php` for one-click admin actions).
+  - Confirmed live via browser automation that allocated tickets
+    (`tn_alloc_ticket` CPT) were already merged into the roster by
+    `attendee_roster()` — all 9 current allocated-ticket holders appear in
+    the Team Rosters picker (203 total rows). No code change was needed
+    for this; it was a verification, not a bug.
 
 ## Immediate next steps
 
@@ -74,19 +105,17 @@ Last updated: 2026-07-28.
 - Scope the real scoring system before replacing the static placeholder.
 - Complete the coordinated `SYNC_SECRET` rotation (see Known cautions) before
   deploying the updated Event Signups Apps Script.
-- Confirm the name fix actually resolves the duplicate-looking entries
-  against a real multi-ticket order — it only surfaces a distinct Preferred
-  Name if one was actually captured per seat at checkout; if the checkout
-  only ever stores one shared value for a whole multi-quantity line item,
-  seats will still look identical (a data-capture gap, not a code bug), and
-  the next step would be a cosmetic "(2 of 4)"-style disambiguator.
-- Otherwise, live-test the team roster picker end to end: the admin
-  screen's new dropdown/panel, the captain "Choose Team Members" flow
-  (including the confirmation email), and cross-team exclusion with two
-  real team signups on the same event.
+- Live-test the team roster picker's remaining untested path: the captain
+  "Choose Team Members" flow on `/manage-signups/` (including the
+  confirmation email), and cross-team exclusion with two real team
+  signups on the same event. The admin screen and the name-per-seat fix
+  are now confirmed live.
 - Watch for any recurrence of the `451`/TLS 1.3 FTP data-connection issue on
   future deploys, now that `wp-plugin-ftps.sh` forces TLS 1.2 — if it still
   recurs, the cause isn't (only) TLS version and needs more digging.
+- If `get_meta($key, false)` comes up again in this codebase, remember it
+  returns `WC_Meta_Data` objects, not raw values — extract `->value`
+  (see `TN_My_Tickets::meta_values_for_key()` for the defensive pattern).
 
 ## Known cautions
 
