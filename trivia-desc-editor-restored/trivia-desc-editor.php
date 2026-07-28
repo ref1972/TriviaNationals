@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 2.0
+ * Version: 2.1
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -4391,6 +4391,155 @@ function tn_tde_active_signup_ids_for_email( $email ) {
 	] );
 }
 
+// ─── Team roster assignment ──────────────────────────────────────────────
+
+function tn_tde_team_signup_ids_for_event_title( $event_title, $exclude_signup_id = 0 ) {
+	$ids = get_posts( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'no_found_rows' => true,
+		'meta_query' => [
+			'relation' => 'AND',
+			[
+				'key' => '_tn_tde_signup_event_title',
+				'value' => $event_title,
+				'compare' => '=',
+			],
+			[
+				'relation' => 'OR',
+				[
+					'key' => '_tn_tde_signup_status',
+					'value' => 'active',
+					'compare' => '=',
+				],
+				[
+					'key' => '_tn_tde_signup_status',
+					'compare' => 'NOT EXISTS',
+				],
+			],
+		],
+	] );
+	$exclude_signup_id = (int) $exclude_signup_id;
+	return array_values( array_filter( array_map( 'absint', $ids ), static function( $id ) use ( $exclude_signup_id ) {
+		return $id !== $exclude_signup_id;
+	} ) );
+}
+
+function tn_tde_signup_assigned_player_ids( $signup_id ) {
+	$raw = tn_tde_signup_meta_value( $signup_id, 'assigned_players' );
+	$ids = $raw !== '' ? json_decode( $raw, true ) : [];
+	if ( ! is_array( $ids ) ) return [];
+	return array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $ids ) ) ) );
+}
+
+function tn_tde_set_signup_assigned_player_ids( $signup_id, array $ids ) {
+	update_post_meta( $signup_id, '_tn_tde_signup_assigned_players', wp_json_encode( array_values( array_unique( array_filter( $ids ) ) ) ) );
+}
+
+/**
+ * Full attendee roster for a team event, annotated with which team (if any
+ * other than $exclude_signup_id) has already claimed each person.
+ *
+ * @return array<int,array{id:string,name:string,preferred_name:string,email:string,taken_by:string}>
+ */
+function tn_tde_team_roster_pool( $event_title, $exclude_signup_id = 0 ) {
+	if ( ! function_exists( 'tn_tickets_attendee_roster' ) ) return [];
+	$roster = tn_tickets_attendee_roster();
+	$taken = [];
+	foreach ( tn_tde_team_signup_ids_for_event_title( $event_title, $exclude_signup_id ) as $other_id ) {
+		$team_name = tn_tde_signup_meta_value( $other_id, 'team' );
+		$label = $team_name !== '' ? $team_name : tn_tde_signup_meta_value( $other_id, 'name' );
+		foreach ( tn_tde_signup_assigned_player_ids( $other_id ) as $player_id ) {
+			if ( ! isset( $taken[ $player_id ] ) ) $taken[ $player_id ] = $label;
+		}
+	}
+	foreach ( $roster as &$person ) {
+		$person['taken_by'] = $taken[ $person['id'] ] ?? '';
+	}
+	unset( $person );
+	return $roster;
+}
+
+/**
+ * Validates posted player ids against a freshly-built pool (closing the race
+ * where two captains submit at the same time) and saves the accepted ones.
+ *
+ * @return array{ok:bool,conflicts:string[],assigned:string[]}
+ */
+function tn_tde_handle_team_roster_save( $signup_id, array $posted_ids ) {
+	$event_title = tn_tde_signup_meta_value( $signup_id, 'event_title' );
+	if ( $event_title === '' ) return [ 'ok' => false, 'conflicts' => [], 'assigned' => [] ];
+
+	$pool_by_id = [];
+	foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
+		$pool_by_id[ $person['id'] ] = $person;
+	}
+
+	$accepted = [];
+	$conflicts = [];
+	foreach ( array_unique( array_map( 'sanitize_text_field', $posted_ids ) ) as $id ) {
+		if ( ! isset( $pool_by_id[ $id ] ) ) continue;
+		if ( $pool_by_id[ $id ]['taken_by'] !== '' ) {
+			$conflicts[] = $pool_by_id[ $id ]['name'] . ' (already on ' . $pool_by_id[ $id ]['taken_by'] . ')';
+			continue;
+		}
+		$accepted[] = $id;
+	}
+	tn_tde_set_signup_assigned_player_ids( $signup_id, $accepted );
+	return [ 'ok' => true, 'conflicts' => $conflicts, 'assigned' => $accepted ];
+}
+
+/**
+ * Filterable checkbox picker markup shared by the admin and captain screens.
+ */
+function tn_tde_render_team_roster_picker( $signup_id, array $pool ) {
+	$assigned = tn_tde_signup_assigned_player_ids( $signup_id );
+	$filter_id = 'tn-roster-filter-' . (int) $signup_id;
+	?>
+	<div class="tn-roster-picker" data-tn-roster-picker>
+		<p class="tn-roster-picker-filter">
+			<label for="<?php echo esc_attr( $filter_id ); ?>">Filter by name</label>
+			<input type="text" id="<?php echo esc_attr( $filter_id ); ?>" data-tn-roster-filter placeholder="Start typing a name&hellip;" autocomplete="off">
+		</p>
+		<?php if ( ! $pool ) : ?>
+			<p class="tn-roster-picker-empty">No registered ticket holders were found yet.</p>
+		<?php else : ?>
+			<ul class="tn-roster-picker-list">
+				<?php foreach ( $pool as $person ) :
+					$is_assigned = in_array( $person['id'], $assigned, true );
+					$is_taken = $person['taken_by'] !== '' && ! $is_assigned;
+					?>
+					<li class="tn-roster-picker-row<?php echo $is_taken ? ' is-taken' : ''; ?>" data-tn-roster-name="<?php echo esc_attr( strtolower( $person['name'] ) ); ?>">
+						<label>
+							<input type="checkbox" name="tn_roster_players[]" value="<?php echo esc_attr( $person['id'] ); ?>" <?php checked( $is_assigned ); ?> <?php disabled( $is_taken ); ?>>
+							<span class="tn-roster-picker-name"><?php echo esc_html( $person['name'] ); ?></span>
+							<?php if ( $is_taken ) : ?>
+								<span class="tn-roster-picker-taken">Taken by <?php echo esc_html( $person['taken_by'] ); ?></span>
+							<?php endif; ?>
+						</label>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		<?php endif; ?>
+	</div>
+	<script>
+	(function() {
+		var input = document.getElementById(<?php echo wp_json_encode( $filter_id ); ?>);
+		if (!input) return;
+		var picker = input.closest('[data-tn-roster-picker]');
+		input.addEventListener('input', function() {
+			var needle = input.value.trim().toLowerCase();
+			picker.querySelectorAll('[data-tn-roster-name]').forEach(function(row) {
+				row.hidden = needle !== '' && row.getAttribute('data-tn-roster-name').indexOf(needle) === -1;
+			});
+		});
+	})();
+	</script>
+	<?php
+}
+
 function tn_tde_is_manage_signups_request() {
 	if ( is_admin() ) return false;
 	$path = trim( (string) wp_parse_url( $_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH ), '/' );
@@ -4443,7 +4592,27 @@ function tn_tde_render_manage_signups_page() {
 	$email = $token ? tn_tde_manage_signups_email_for_token( $token ) : '';
 	$status = isset( $_GET['tn_manage'] ) ? sanitize_key( wp_unslash( $_GET['tn_manage'] ) ) : '';
 	$lookup_status = isset( $_GET['tn_lookup'] ) ? sanitize_key( wp_unslash( $_GET['tn_lookup'] ) ) : '';
+	$roster_conflicts = isset( $_GET['tn_roster_conflicts'] ) ? sanitize_text_field( wp_unslash( $_GET['tn_roster_conflicts'] ) ) : '';
 	$signup_ids = $email ? tn_tde_active_signup_ids_for_email( $email ) : [];
+
+	$roster_view = false;
+	$roster_signup_id = 0;
+	$roster_meta = null;
+	$roster_pool = [];
+	if ( $email && isset( $_GET['tn_view'] ) && sanitize_key( wp_unslash( $_GET['tn_view'] ) ) === 'roster' ) {
+		$candidate_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
+		if ( $candidate_id && in_array( $candidate_id, $signup_ids, true ) ) {
+			$candidate_meta = tn_tde_manage_signup_card_meta( $candidate_id );
+			$candidate_event = $candidate_meta['event_slug'] ? tn_tde_get_event_by_detail_slug( $candidate_meta['event_slug'] ) : null;
+			if ( $candidate_event && tn_tde_event_is_team_signup( $candidate_event ) ) {
+				$roster_view = true;
+				$roster_signup_id = $candidate_id;
+				$roster_meta = $candidate_meta;
+				$roster_pool = tn_tde_team_roster_pool( $candidate_meta['event_title'], $candidate_id );
+			}
+		}
+	}
+
 	get_header();
 	?>
 	<main class="tn-signup-page tn-manage-page">
@@ -4659,6 +4828,23 @@ function tn_tde_render_manage_signups_page() {
 			button.tn-manage-cancel:hover {
 				background: rgba(255,138,138,0.12);
 			}
+			.tn-manage-roster-link {
+				background: transparent;
+				border: 1px solid var(--tn-grid-cyan);
+				border-radius: 999px;
+				color: var(--tn-grid-cyan);
+				cursor: pointer;
+				font-family: Outfit, Inter, sans-serif;
+				font-size: 0.85rem;
+				font-weight: 900;
+				letter-spacing: 0.06em;
+				padding: 0.7rem 1.4rem;
+				text-decoration: none;
+				text-transform: uppercase;
+			}
+			.tn-manage-roster-link:hover {
+				background: rgba(0,230,255,0.12);
+			}
 			.tn-manage-empty,
 			.tn-manage-expired {
 				display: grid;
@@ -4716,6 +4902,72 @@ function tn_tde_render_manage_signups_page() {
 			.tn-signup-trap {
 				position: absolute !important;
 				left: -9999px !important;
+			}
+			.tn-roster-back {
+				color: var(--tn-grid-cyan);
+				display: inline-block;
+				font-weight: 800;
+				margin-bottom: 1rem;
+				text-decoration: none;
+			}
+			.tn-roster-picker-filter {
+				margin: 0 0 0.9rem;
+			}
+			.tn-roster-picker-filter label {
+				display: block;
+				margin: 0 0 0.3rem;
+				color: var(--tn-grid-muted);
+				font-size: 0.78rem;
+				font-weight: 800;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+			.tn-roster-picker-filter input {
+				width: 100%;
+				padding: 0.6rem 0.7rem;
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 6px;
+				background: rgba(7,8,18,0.72);
+				color: var(--tn-grid-text);
+			}
+			.tn-roster-picker-list {
+				display: grid;
+				gap: 0.4rem;
+				list-style: none;
+				margin: 0;
+				max-height: 420px;
+				overflow-y: auto;
+				padding: 0;
+			}
+			.tn-roster-picker-row {
+				border: 1px solid var(--tn-grid-line);
+				border-radius: 6px;
+				padding: 0.55rem 0.75rem;
+			}
+			.tn-roster-picker-row label {
+				align-items: baseline;
+				cursor: pointer;
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0 0.6rem;
+			}
+			.tn-roster-picker-row.is-taken {
+				opacity: 0.5;
+			}
+			.tn-roster-picker-row.is-taken label {
+				cursor: not-allowed;
+			}
+			.tn-roster-picker-name {
+				color: var(--tn-grid-text);
+				font-weight: 700;
+			}
+			.tn-roster-picker-taken {
+				color: var(--tn-grid-muted);
+				font-size: 0.82rem;
+				font-style: italic;
+			}
+			.tn-roster-picker-empty {
+				color: var(--tn-grid-muted);
 			}
 			@media (max-width: 720px) {
 				.tn-manage-lookup-form {
@@ -4776,6 +5028,24 @@ function tn_tde_render_manage_signups_page() {
 						<button type="submit" data-tn-saving-label="Sending...">Email Me a Link</button>
 					</form>
 				</section>
+			<?php elseif ( $roster_view ) : ?>
+				<a class="tn-roster-back" href="<?php echo esc_url( tn_tde_manage_signups_url( $token ) ); ?>">&larr; Back to your signups</a>
+				<p class="tn-signup-kicker"><?php echo esc_html( $roster_meta['event_title'] ?: 'Team event' ); ?></p>
+				<h1>Choose Team Members</h1>
+				<?php if ( $status === 'roster_saved' ) : ?>
+					<p class="tn-signup-page-message is-success">Your roster was saved.<?php echo $roster_conflicts ? ' Skipped (already claimed): ' . esc_html( $roster_conflicts ) . '.' : ''; ?></p>
+				<?php elseif ( $status === 'roster_error' ) : ?>
+					<p class="tn-signup-page-message is-error">Sorry, that roster could not be saved. Please try again.</p>
+				<?php endif; ?>
+				<p class="tn-signup-page-intro">Pick from registered ticket holders for <strong style="color: var(--tn-grid-text);"><?php echo esc_html( $roster_meta['team'] ?: 'your team' ); ?></strong>. Anyone already claimed by another team for this event is greyed out.</p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="tn_tde_manage_team_roster_save">
+					<input type="hidden" name="tn_token" value="<?php echo esc_attr( $token ); ?>">
+					<input type="hidden" name="signup_id" value="<?php echo esc_attr( $roster_signup_id ); ?>">
+					<?php wp_nonce_field( 'tn_tde_manage_signup_' . $roster_signup_id, 'tn_tde_manage_nonce' ); ?>
+					<?php tn_tde_render_team_roster_picker( $roster_signup_id, $roster_pool ); ?>
+					<p><button type="submit" class="tn-manage-save" data-tn-saving-label="Saving...">Save Roster</button></p>
+				</form>
 			<?php elseif ( ! $signup_ids ) : ?>
 				<section class="tn-manage-empty" aria-labelledby="tn-manage-empty-title">
 					<h2 id="tn-manage-empty-title">No active signups</h2>
@@ -4824,6 +5094,9 @@ function tn_tde_render_manage_signups_page() {
 									</form>
 								<?php else : ?>
 									<span class="tn-manage-card-when">Flight changes are not available for this event.</span>
+								<?php endif; ?>
+								<?php if ( $event && tn_tde_event_is_team_signup( $event ) ) : ?>
+									<a class="tn-manage-roster-link" href="<?php echo esc_url( add_query_arg( [ 'tn_token' => $token, 'tn_view' => 'roster', 'signup_id' => $signup_id ], home_url( '/manage-signups/' ) ) ); ?>">Choose Team Members</a>
 								<?php endif; ?>
 								<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Cancel your <?php echo esc_js( $meta['event_title'] ?: 'event' ); ?> signup? This removes you from the list.');">
 									<input type="hidden" name="action" value="tn_tde_manage_signup_cancel">
@@ -4961,6 +5234,45 @@ function tn_tde_handle_manage_signup_cancel() {
 		$context['token']
 	);
 	wp_safe_redirect( add_query_arg( 'tn_manage', 'cancelled', $context['redirect'] ) );
+	exit;
+}
+
+add_action( 'admin_post_tn_tde_manage_team_roster_save', 'tn_tde_handle_manage_team_roster_save' );
+add_action( 'admin_post_nopriv_tn_tde_manage_team_roster_save', 'tn_tde_handle_manage_team_roster_save' );
+
+function tn_tde_handle_manage_team_roster_save() {
+	$context = tn_tde_manage_signup_guard( true );
+	$signup_id = $context['signup_id'];
+	$event_slug = tn_tde_signup_meta_value( $signup_id, 'event_slug' );
+	$event = $event_slug ? tn_tde_get_event_by_detail_slug( $event_slug ) : null;
+	if ( ! $event || ! tn_tde_event_is_team_signup( $event ) ) {
+		$context['fail']( 'error' );
+	}
+	$posted_ids = isset( $_POST['tn_roster_players'] ) ? (array) wp_unslash( $_POST['tn_roster_players'] ) : [];
+	$result = tn_tde_handle_team_roster_save( $signup_id, $posted_ids );
+	if ( $result['ok'] ) {
+		$event_title = tn_tde_signup_meta_value( $signup_id, 'event_title' );
+		$names = [];
+		foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
+			if ( in_array( $person['id'], $result['assigned'], true ) ) $names[] = $person['name'];
+		}
+		$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
+		$html = '<div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">';
+		$html .= '<h2 style="margin:0 0 16px;color:#17406f;">Your team roster was updated</h2>';
+		$html .= '<p><strong>' . esc_html( $team_name ?: 'Your team' ) . '</strong> for ' . esc_html( $event_title ) . ':</p>';
+		$html .= $names
+			? ( '<ul style="margin:8px 0 16px;padding-left:18px;">' . implode( '', array_map( static function( $name ) { return '<li>' . esc_html( $name ) . '</li>'; }, $names ) ) . '</ul>' )
+			: '<p>No players are currently assigned.</p>';
+		$html .= '<p><a href="' . esc_url( tn_tde_manage_signups_url( $context['token'] ) ) . '">Manage your signups</a></p>';
+		$html .= '</div>';
+		tn_tde_send_signup_email( $context['email'], 'Your Trivia Nationals team roster was updated', $html );
+	}
+	wp_safe_redirect( add_query_arg( [
+		'tn_view' => 'roster',
+		'signup_id' => $signup_id,
+		'tn_manage' => $result['ok'] ? 'roster_saved' : 'roster_error',
+		'tn_roster_conflicts' => implode( '; ', $result['conflicts'] ),
+	], $context['redirect'] ) );
 	exit;
 }
 
@@ -7653,6 +7965,14 @@ add_action( 'admin_menu', function () {
 		'tn-signup-settings',
 		'tn_tde_signup_settings_page'
 	);
+	add_submenu_page(
+		'trivia-desc-editor',
+		'Team Rosters',
+		'Team Rosters',
+		'edit_pages',
+		'tn-team-rosters',
+		'tn_tde_team_rosters_page'
+	);
 } );
 
 add_action( 'admin_init', function() {
@@ -7689,6 +8009,103 @@ function tn_tde_signup_settings_page() {
 	</div>
 	<?php
 }
+
+/**
+ * Active signups for team events, grouped by event title, for the Team
+ * Rosters admin screen.
+ *
+ * @return array<string,int[]>
+ */
+function tn_tde_team_signup_admin_rows() {
+	$ids = get_posts( [
+		'post_type' => 'tn_tde_signup',
+		'post_status' => 'private',
+		'posts_per_page' => -1,
+		'fields' => 'ids',
+		'no_found_rows' => true,
+		'meta_key' => '_tn_tde_signup_event_title',
+		'orderby' => 'meta_value',
+		'order' => 'ASC',
+		'meta_query' => [
+			'relation' => 'OR',
+			[
+				'key' => '_tn_tde_signup_status',
+				'value' => 'active',
+				'compare' => '=',
+			],
+			[
+				'key' => '_tn_tde_signup_status',
+				'compare' => 'NOT EXISTS',
+			],
+		],
+	] );
+	// Filter in PHP (not by whether Team Name text was filled in) so a
+	// captain who left the name blank still shows up here, matching the
+	// same tn_tde_event_is_team_signup() check that shows their "Choose
+	// Team Members" button.
+	$groups = [];
+	foreach ( $ids as $id ) {
+		$event_slug = tn_tde_signup_meta_value( $id, 'event_slug' );
+		$event = $event_slug ? tn_tde_get_event_by_detail_slug( $event_slug ) : null;
+		if ( ! $event || ! tn_tde_event_is_team_signup( $event ) ) continue;
+		$groups[ tn_tde_signup_meta_value( $id, 'event_title' ) ][] = (int) $id;
+	}
+	return $groups;
+}
+
+function tn_tde_team_rosters_page() {
+	if ( ! current_user_can( 'edit_pages' ) ) wp_die( 'You do not have permission to manage team rosters.' );
+	$notice = isset( $_GET['tn_roster_notice'] ) ? sanitize_key( wp_unslash( $_GET['tn_roster_notice'] ) ) : '';
+	$conflicts = isset( $_GET['tn_roster_conflicts'] ) ? sanitize_text_field( wp_unslash( $_GET['tn_roster_conflicts'] ) ) : '';
+	$groups = tn_tde_team_signup_admin_rows();
+	?>
+	<div class="wrap">
+		<h1>Team Rosters</h1>
+		<p>Assign registered ticket holders to each team. Once someone is assigned to a team for an event, they&#8217;re removed from the pool for every other team in that event.</p>
+		<?php if ( $notice === 'saved' ) : ?>
+			<div class="notice notice-success is-dismissible"><p>Roster saved.<?php echo $conflicts ? ' Skipped (already claimed): ' . esc_html( $conflicts ) : ''; ?></p></div>
+		<?php elseif ( $notice === 'error' ) : ?>
+			<div class="notice notice-error is-dismissible"><p>That roster could not be saved.</p></div>
+		<?php endif; ?>
+		<?php if ( ! $groups ) : ?>
+			<p>No active team signups yet.</p>
+		<?php endif; ?>
+		<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
+			<h2><?php echo esc_html( $event_title ?: 'Untitled event' ); ?></h2>
+			<?php foreach ( $signup_ids as $signup_id ) :
+				$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
+				$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
+				$pool = tn_tde_team_roster_pool( $event_title, $signup_id );
+				?>
+				<div class="postbox" style="padding:16px;margin-bottom:16px;max-width:720px;">
+					<h3 style="margin-top:0;"><?php echo esc_html( $team_name ?: 'Unnamed team' ); ?> <small style="font-weight:normal;color:#646970;">(captain: <?php echo esc_html( $captain ); ?>)</small></h3>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+						<input type="hidden" name="action" value="tn_tde_admin_save_team_roster">
+						<input type="hidden" name="signup_id" value="<?php echo esc_attr( $signup_id ); ?>">
+						<?php wp_nonce_field( 'tn_tde_admin_save_team_roster_' . $signup_id, 'tn_tde_admin_roster_nonce' ); ?>
+						<?php tn_tde_render_team_roster_picker( $signup_id, $pool ); ?>
+						<p><button type="submit" class="button button-primary">Save Roster</button></p>
+					</form>
+				</div>
+			<?php endforeach; ?>
+		<?php endforeach; ?>
+	</div>
+	<?php
+}
+
+add_action( 'admin_post_tn_tde_admin_save_team_roster', function() {
+	if ( ! current_user_can( 'edit_pages' ) ) wp_die( 'You do not have permission to manage team rosters.' );
+	$signup_id = isset( $_POST['signup_id'] ) ? absint( $_POST['signup_id'] ) : 0;
+	check_admin_referer( 'tn_tde_admin_save_team_roster_' . $signup_id, 'tn_tde_admin_roster_nonce' );
+	$posted_ids = isset( $_POST['tn_roster_players'] ) ? (array) wp_unslash( $_POST['tn_roster_players'] ) : [];
+	$result = tn_tde_handle_team_roster_save( $signup_id, $posted_ids );
+	wp_safe_redirect( add_query_arg( [
+		'page' => 'tn-team-rosters',
+		'tn_roster_notice' => $result['ok'] ? 'saved' : 'error',
+		'tn_roster_conflicts' => implode( '; ', $result['conflicts'] ),
+	], admin_url( 'admin.php' ) ) );
+	exit;
+} );
 
 function tn_tde_admin_list_styles() {
 	?>

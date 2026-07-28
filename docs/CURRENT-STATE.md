@@ -41,6 +41,10 @@ Last human review: 2026-07-27.
   because doing so would send a real message.
 - Confirm production usage before modifying the separate
   `trivia-nationals-event-schedule/` plugin.
+- A team roster picker for team-based event signups (admin "Team Rosters"
+  screen plus a captain-facing "Choose Team Members" screen on
+  `/manage-signups/`) was written into Event Schedule Manager 2.1 and My
+  Tickets 0.5.4. Source only — not committed, not deployed, not live-tested.
 
 ## Local artifacts excluded from Git
 

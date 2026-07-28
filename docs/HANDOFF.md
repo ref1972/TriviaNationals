@@ -21,6 +21,17 @@ Last updated: 2026-07-28.
   `scripts/project-checkpoint.sh --check` — passed cleanly with the local tree
   already matching `origin/main` at `8bc6ab4`. Confirms the shared-memory
   handoff round-trips correctly between Codex and Claude on this machine.
+- 2026-07-28: Wrote (not yet committed/deployed) a team roster picker for
+  team-based event signups: a filterable checkbox list of registered ticket
+  holders, usable by both a WP admin ("Team Rosters" submenu under
+  `trivia-desc-editor`) and the registering team captain (a "Choose Team
+  Members" button on their `/manage-signups/` card, opening a dedicated
+  picker screen on the same route). Once someone is assigned to a team for an
+  event, they're greyed out for every other team in that event. Added
+  `tn_tickets_attendee_roster()` to My Tickets (0.5.4) as the shared source of
+  truth for ticket holders, and the picker/assignment logic to Event Schedule
+  Manager (2.1). `php -l` passes on both files; not yet run against a live
+  WordPress/WooCommerce site.
 
 ## Immediate next steps
 
@@ -30,6 +41,11 @@ Last updated: 2026-07-28.
 - Scope the real scoring system before replacing the static placeholder.
 - Complete the coordinated `SYNC_SECRET` rotation (see Known cautions) before
   deploying the updated Event Signups Apps Script.
+- Deploy and live-test the new team roster picker (Event Schedule Manager
+  2.1 + My Tickets 0.5.4) before relying on it: verify the admin "Team
+  Rosters" screen, the captain "Choose Team Members" flow end to end
+  (including the confirmation email), and the cross-team exclusion with two
+  real team signups on the same event.
 
 ## Known cautions
 

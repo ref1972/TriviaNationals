@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.5.3
+ * Version: 0.5.4
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -230,6 +230,50 @@ JS
         }
         usort($tickets, static fn(array $a, array $b): int => strcasecmp($a['preferred_name'], $b['preferred_name']));
         return $tickets;
+    }
+
+    /**
+     * Canonical roster of registered ticket holders, one row per seat, for
+     * other plugins (e.g. team roster assignment) to build attendee pickers
+     * from. Unlike ticket_code(), the id here is not derived from wp_salt()
+     * so it stays stable if WP secret keys are ever rotated.
+     *
+     * @return array<int,array{id:string,name:string,preferred_name:string,email:string}>
+     */
+    public static function attendee_roster(): array {
+        $roster = [];
+        if (function_exists('wc_get_orders')) {
+            $orders = wc_get_orders(['limit' => -1, 'orderby' => 'date', 'order' => 'ASC']);
+            foreach ($orders as $order) {
+                if (!$order instanceof WC_Order || !$order->is_paid() || in_array($order->get_status(), ['cancelled', 'refunded', 'failed'], true)) continue;
+                $email = strtolower(trim($order->get_billing_email()));
+                $registered_name = trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name());
+                foreach ($order->get_items('line_item') as $item_id => $item) {
+                    if (!$item instanceof WC_Order_Item_Product || !self::item_is_ticket($item)) continue;
+                    $quantity = max(1, (int) $item->get_quantity());
+                    $preferred_name = self::preferred_name($item, $order);
+                    for ($position = 1; $position <= $quantity; $position++) {
+                        $roster[] = [
+                            'id' => 'wc:' . $order->get_id() . ':' . $item_id . ':' . $position,
+                            'name' => $registered_name !== '' ? $registered_name : $preferred_name,
+                            'preferred_name' => $preferred_name,
+                            'email' => $email,
+                        ];
+                    }
+                }
+            }
+        }
+        foreach (self::allocated_tickets() as $allocated) {
+            $name = trim((string) $allocated['preferred_name']);
+            $roster[] = [
+                'id' => 'alloc:' . $allocated['id'],
+                'name' => $name,
+                'preferred_name' => $name,
+                'email' => strtolower(trim((string) $allocated['email'])),
+            ];
+        }
+        usort($roster, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+        return $roster;
     }
 
     public static function render_shortcode(): string {
@@ -1025,3 +1069,10 @@ add_action('plugins_loaded', static function (): void {
         TN_My_Tickets::init();
     }
 });
+
+/**
+ * @return array<int,array{id:string,name:string,preferred_name:string,email:string}>
+ */
+function tn_tickets_attendee_roster(): array {
+    return TN_My_Tickets::attendee_roster();
+}
