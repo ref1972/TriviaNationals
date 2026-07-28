@@ -1,8 +1,15 @@
 const SPREADSHEET_ID = '12313QDfiuz96DhApw65MieHHePBcSxXIZJI82ductCA';
 const SHEET_NAME = 'Signups';
-const SYNC_SECRET = '6b4c584070e064f06cc7790808bcb0c2546a5ad1016f89c0';
 const SUMMARY_FROM_EMAIL = 'info@trivianationals.org';
 const SUMMARY_FROM_NAME = 'Trivia Nationals';
+
+function getSyncSecret_() {
+  const secret = PropertiesService.getScriptProperties().getProperty('SYNC_SECRET');
+  if (!secret) {
+    throw new Error('Missing required SYNC_SECRET Script Property.');
+  }
+  return secret;
+}
 
 const SIGNUP_HEADERS = [
   'signup_id',
@@ -37,7 +44,7 @@ function authorizeMailApp() {
 function doPost(e) {
   try {
     const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (payload.secret !== SYNC_SECRET) {
+    if (payload.secret !== getSyncSecret_()) {
       return jsonResponse({ ok: false, error: 'Unauthorized' });
     }
 
