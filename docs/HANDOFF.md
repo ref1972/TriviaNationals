@@ -1,6 +1,6 @@
 # Current handoff
 
-Last updated: 2026-07-27.
+Last updated: 2026-07-28.
 
 ## Recently completed
 
@@ -10,9 +10,17 @@ Last updated: 2026-07-27.
 - Restored event signup matching after the Knock Out Quiz title change.
 - Built and activated Attendee Email v0.3.0. A read-only recipient preview found
   180 unique ticket/allocated addresses at test time; no email blast was sent.
-- Added and deployed the static scores-site coming-soon page.
+- Added and deployed the static scores-site coming-soon page, then iterated its
+  copy twice (subheading and info-card text); both edits were pushed as part of
+  `8bc6ab4` and are **live verified** at `https://scores.trivianationals.org`.
 - Verified read-only explicit-FTPS access to the scores account.
-- Added this shared Claude/Codex project-memory and checkpoint system.
+- Added this shared Claude/Codex project-memory and checkpoint system
+  (`8bc6ab4`).
+- 2026-07-28: Claude independently pulled `main`, read `AGENTS.md` → `PROJECT.md`
+  → `docs/CURRENT-STATE.md` → `docs/DEPLOYMENT.md` → `docs/HANDOFF.md`, and ran
+  `scripts/project-checkpoint.sh --check` — passed cleanly with the local tree
+  already matching `origin/main` at `8bc6ab4`. Confirms the shared-memory
+  handoff round-trips correctly between Codex and Claude on this machine.
 
 ## Immediate next steps
 
@@ -20,6 +28,8 @@ Last updated: 2026-07-27.
   checkpoint, after meaningful future releases.
 - Pull `main` on the MacBook before continuing work there.
 - Scope the real scoring system before replacing the static placeholder.
+- Complete the coordinated `SYNC_SECRET` rotation (see Known cautions) before
+  deploying the updated Event Signups Apps Script.
 
 ## Known cautions
 

@@ -8,7 +8,7 @@ Generated: 2026-07-27
 ## Git
 
 - Branch: `main`
-- HEAD: `cae6f43` — Add resilient attendee email dashboard
+- HEAD: `8bc6ab4` — Add shared Claude and Codex project memory
 - Remote: `https://github.com/ref1972/TriviaNationals.git`
 
 ## Tracked components
@@ -70,6 +70,7 @@ settings are deliberately excluded from this inventory.
 
 ## Recent commits
 
+- `8bc6ab4` Add shared Claude and Codex project memory
 - `cae6f43` Add resilient attendee email dashboard
 - `9acf897` Restore signup matching for renamed Knock Out Quiz
 - `a956937` Add electronic ticketing and production integrations
@@ -79,4 +80,3 @@ settings are deliberately excluded from this inventory.
 - `9c30c7a` Relay signup emails through the Apps Script Gmail sender
 - `f8ec74c` Add submit spinners and prominent success banners to signup forms
 - `3ecad8d` Remove cancelled signups from the Google Sheet
-- `e3afe8b` Add attendee self-service signup management via magic links
