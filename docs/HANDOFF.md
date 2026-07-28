@@ -52,6 +52,19 @@ Last updated: 2026-07-28.
   the pre-incident content from a local backup taken seconds earlier, then
   redeployed the feature version — both hash-verified. `scripts/wp-plugin-ftps.sh`
   now forces TLS 1.2 on both `fetch_live`/`push_live` to prevent a repeat.
+- 2026-07-28: the user tried the admin "Team Rosters" screen live and found
+  two issues, both now fixed, committed, pushed, and **deployed**: (1) the
+  page rendered a full attendee-list picker for every team at once — replaced
+  with a single dropdown (grouped by event, `(count)` per team) driving one
+  shared panel, GET-reload on change, no AJAX; (2) the attendee list showed
+  apparent duplicate names — `tn_tickets_attendee_roster()`'s `name` field
+  had a backwards ternary that preferred the order's shared billing name
+  over the per-seat Preferred Name, so every seat from a multi-ticket order
+  showed the identical billing name. Fixed to just use `$preferred_name`
+  (which already falls back to the billing name itself when unset). My
+  Tickets is now live at **0.5.5**, Event Schedule Manager at **2.2**, both
+  hash-verified. Pre-deploy drift check on both files found no unexpected
+  production changes this time.
 
 ## Immediate next steps
 
@@ -61,10 +74,16 @@ Last updated: 2026-07-28.
 - Scope the real scoring system before replacing the static placeholder.
 - Complete the coordinated `SYNC_SECRET` rotation (see Known cautions) before
   deploying the updated Event Signups Apps Script.
-- Live-test the deployed team roster picker end to end: the admin "Team
-  Rosters" screen, the captain "Choose Team Members" flow (including the
-  confirmation email), and the cross-team exclusion with two real team
-  signups on the same event.
+- Confirm the name fix actually resolves the duplicate-looking entries
+  against a real multi-ticket order — it only surfaces a distinct Preferred
+  Name if one was actually captured per seat at checkout; if the checkout
+  only ever stores one shared value for a whole multi-quantity line item,
+  seats will still look identical (a data-capture gap, not a code bug), and
+  the next step would be a cosmetic "(2 of 4)"-style disambiguator.
+- Otherwise, live-test the team roster picker end to end: the admin
+  screen's new dropdown/panel, the captain "Choose Team Members" flow
+  (including the confirmation email), and cross-team exclusion with two
+  real team signups on the same event.
 - Watch for any recurrence of the `451`/TLS 1.3 FTP data-connection issue on
   future deploys, now that `wp-plugin-ftps.sh` forces TLS 1.2 — if it still
   recurs, the cause isn't (only) TLS version and needs more digging.
