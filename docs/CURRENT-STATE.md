@@ -48,8 +48,8 @@ Last human review: 2026-07-29.
   forwarding externally, replicating the old HostGator forwarders. See
   docs/HANDOFF.md and docs/DECISIONS.md for details and remaining gaps.
 - **Announcements plugin (`trivia-nationals-announcements/`) is live at
-  v0.4.1** (deployed and hash-verified 2026-07-29; **not yet committed to
-  Git** — see docs/HANDOFF.md): a native-CPT admin screen for authoring
+  v0.4.2** (deployed and hash-verified 2026-07-29; committed and pushed to
+  `main` — see docs/HANDOFF.md): a native-CPT admin screen for authoring
   announcements (Title/Teaser/HTML body/Published-Draft), a
   drag-and-drop **"Reorder"** admin screen, a public `/announcements/`
   page headed **"News & Notes"** on-site (newest-first, one combined

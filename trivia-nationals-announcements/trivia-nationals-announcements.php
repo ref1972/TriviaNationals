@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.4.1
+ * Version: 0.4.2
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -484,12 +484,21 @@ final class TN_Announcements {
             return ['ok' => true, 'via' => 'apps_script', 'quota_exhausted' => false];
         }
         $quota_exhausted = stripos($relay['error'], 'too many times') !== false || stripos($relay['error'], 'quota') !== false;
+        if ($quota_exhausted) {
+            // Every remaining recipient would fail the exact same way right
+            // now, so don't spend this one on the unreliable wp_mail()
+            // fallback -- leave them untouched (not sent, not failed) so a
+            // resumed batch retries them once the quota resets, instead of
+            // gambling their delivery on a fallback we already know we
+            // don't trust.
+            return ['ok' => false, 'via' => 'apps_script', 'quota_exhausted' => true];
+        }
         $ok = wp_mail($email, $subject, $html, [
             'From: Trivia Nationals <info@trivianationals.org>',
             'Reply-To: Trivia Nationals <info@trivianationals.org>',
             'Content-Type: text/html; charset=UTF-8',
         ]);
-        return ['ok' => (bool) $ok, 'via' => 'wp_mail_fallback', 'quota_exhausted' => $quota_exhausted];
+        return ['ok' => (bool) $ok, 'via' => 'wp_mail_fallback', 'quota_exhausted' => false];
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -630,6 +639,17 @@ final class TN_Announcements {
         $slice = array_slice($batch['recipients'], $offset, self::BATCH_SIZE);
         foreach ($slice as $index => $recipient) {
             $result = self::send_to($recipient['email'], $batch['subject'], $batch['body']);
+
+            if (!empty($result['quota_exhausted'])) {
+                // Leave this recipient's offset/counts untouched -- they
+                // were not sent anywhere, so a resumed batch will retry
+                // them once the quota resets (typically around midnight
+                // Pacific Time), rather than skipping them as "done."
+                wp_send_json_error([
+                    'message' => 'The Apps Script relay\'s daily sending quota was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. It typically resets around midnight Pacific Time — use "Resume interrupted send" after that to continue.',
+                ]);
+            }
+
             if ($result['ok']) {
                 $batch['sent']++;
             } else {
@@ -644,18 +664,6 @@ final class TN_Announcements {
             $batch['next_offset']++;
             // Persist after every recipient so a retried request continues instead of resending.
             set_transient($key, $batch, self::BATCH_TTL);
-
-            if (!empty($result['quota_exhausted'])) {
-                // Every remaining recipient would fail the exact same way
-                // right now, so stop here instead of burning through the
-                // rest of the batch via the unreliable fallback mailer. The
-                // transient is already saved at the current offset, so
-                // "Resume interrupted send" picks up cleanly once the quota
-                // resets (typically around midnight Pacific Time).
-                wp_send_json_error([
-                    'message' => 'The Apps Script relay\'s daily sending quota was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. It typically resets around midnight Pacific Time — use "Resume interrupted send" after that to continue.',
-                ]);
-            }
 
             if ($index < count($slice) - 1) {
                 usleep(self::BATCH_INTER_SEND_USLEEP);
@@ -698,6 +706,9 @@ final class TN_Announcements {
         if ($result['ok']) {
             $note = $result['via'] === 'wp_mail_fallback' ? ' (via the fallback mailer, not the usual relay — worth confirming it actually arrived)' : '';
             wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . $note . '.']);
+        }
+        if (!empty($result['quota_exhausted'])) {
+            wp_send_json_error(['message' => 'The Apps Script relay\'s daily sending quota was reached, so the test could not be sent. It typically resets around midnight Pacific Time.']);
         }
         wp_send_json_error(['message' => 'The test email could not be sent.']);
     }

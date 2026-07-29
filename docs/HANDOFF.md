@@ -296,10 +296,8 @@ Last updated: 2026-07-29.
        resets around midnight Pacific and to use "Resume interrupted
        send" afterward — the batch transient is already saved at the
        correct offset for that to work cleanly. `php -l` clean,
-       hash-verified live as of 2026-07-29 (v0.4.1). **Not yet
-       committed to Git** — v0.4.0/v0.4.1 exist only as deployed code and
-       an uncommitted local working-tree change; commit only once the
-       user explicitly asks, per this project's standing rule.
+       hash-verified live as of 2026-07-29 (v0.4.1), committed and pushed
+       to `main` at `32579cb`.
     - Functional verification of the live quota-pause path itself (i.e.
       actually triggering `wp_send_json_error()`'s pause message through a
       real AJAX batch call) has **not** been done — that requires an
@@ -307,6 +305,25 @@ Last updated: 2026-07-29.
       should do unattended. The underlying detection logic reuses the
       exact `stripos()` match already confirmed correct against the real
       Apps Script error text via the raw `curl` test above.
+    4. **v0.4.2** — a Codex code review of `32579cb` caught a real bug in
+       the v0.4.1 quota-pause logic: `send_to()` still attempted the
+       `wp_mail()` fallback for the recipient whose Apps Script call hit
+       the quota, and `ajax_send_batch()` incremented `next_offset` and
+       persisted the transient for that recipient *before* checking
+       `quota_exhausted` — so that one recipient was marked "done" and
+       skipped on every future "Resume interrupted send," even if the
+       fallback had silently dropped their message (the exact failure
+       mode this whole feature exists to prevent). Fixed by having
+       `send_to()` skip the `wp_mail()` fallback entirely when quota
+       exhaustion is detected (spending it on an already-distrusted
+       fallback gains nothing once every subsequent send will fail the
+       same way) and having `ajax_send_batch()` check `quota_exhausted`
+       *before* incrementing the offset or saving the transient, so that
+       recipient is left untouched for the next resume instead of counted
+       as sent or failed. Also improved `ajax_test()`'s error message to
+       name the quota specifically instead of a generic "could not be
+       sent." `php -l` clean, hash-verified live, committed and pushed to
+       `main`.
 
 ## Immediate next steps
 
@@ -336,9 +353,6 @@ Last updated: 2026-07-29.
   digest to whichever addresses Email Log Search still shows as
   undelivered from the original 182-recipient send — the user deferred
   this deliberately until they were back at the keyboard.
-- Commit and push the Announcements plugin's fallback-tracking/
-  quota-pause change (currently v0.4.1, uncommitted) once the user
-  explicitly confirms — do not commit it proactively.
 - Consider directly confirming the Apps Script `MailApp` daily quota via
   `MailApp.getRemainingDailyQuota()` (run manually in the Apps Script
   editor, view the Execution log) rather than relying solely on the raw
@@ -367,7 +381,3 @@ Last updated: 2026-07-29.
   actually dropped. Any bulk send should be treated as unverified until
   cross-checked against Google Workspace's Email Log Search, not just the
   sender/failure counts shown in the WordPress admin screen.
-- The Announcements plugin (`trivia-nationals-announcements/`) has
-  uncommitted local changes (fallback tracking + quota-exhaustion pause,
-  v0.4.1) that are deployed live but not yet in Git — see the 2026-07-29
-  entries above before assuming Git matches production for this file.

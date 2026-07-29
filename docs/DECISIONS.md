@@ -1,5 +1,23 @@
 # Decisions
 
+## 2026-07-29 — Never spend the quota-exhausted recipient on the fallback mailer
+
+A Codex code review of `32579cb` found that the v0.4.1 quota-pause logic
+still attempted `wp_mail()` and advanced the batch offset for the
+recipient whose Apps Script call actually hit the quota, so that
+recipient was marked "done" and silently skipped on every future resume —
+even though the fallback might have dropped their message the same way it
+dropped ~76 others in the incident this feature was built to prevent.
+Fixed in v0.4.2: `send_to()` no longer attempts `wp_mail()` once quota
+exhaustion is detected, and `ajax_send_batch()` checks `quota_exhausted`
+before incrementing the offset or saving the transient.
+
+Reason: once the quota is confirmed exhausted, every subsequent send will
+fail identically, so there's nothing to gain by gambling one more
+recipient on a fallback mailer already known to silently lose mail — and
+every recipient a paused batch skips past is one that "Resume interrupted
+send" will never retry.
+
 ## 2026-07-29 — Pause a digest batch send on Apps Script quota exhaustion
 instead of letting it silently fall back for every remaining recipient
 
