@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.2.2
+ * Version: 0.3.0
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -42,6 +42,7 @@ final class TN_Announcements {
 
         add_action('wp_ajax_tn_announcements_preview', [self::class, 'ajax_preview']);
         add_action('wp_ajax_tn_announcements_prepare', [self::class, 'ajax_prepare']);
+        add_action('wp_ajax_tn_announcements_prepare_manual', [self::class, 'ajax_prepare_manual']);
         add_action('wp_ajax_tn_announcements_send_batch', [self::class, 'ajax_send_batch']);
         add_action('wp_ajax_tn_announcements_test', [self::class, 'ajax_test']);
         add_action('wp_ajax_tn_announcements_save_order', [self::class, 'ajax_save_order']);
@@ -494,6 +495,63 @@ final class TN_Announcements {
         ]);
     }
 
+    /**
+     * Same as ajax_prepare(), but the recipient list is a manually pasted set
+     * of addresses instead of the WooCommerce-order-derived audience — for
+     * resending to specific addresses (e.g. ones a prior send failed to
+     * reach), reusing the exact same digest content and throttled batching.
+     */
+    public static function ajax_prepare_manual(): void {
+        self::guard_ajax();
+        $published_ids = self::published_announcement_ids(self::announcement_ids_from_request());
+        if (!$published_ids) {
+            wp_send_json_error(['message' => 'Select at least one published announcement to send.']);
+        }
+
+        $raw = isset($_POST['manual_emails']) ? (string) wp_unslash($_POST['manual_emails']) : '';
+        $candidates = preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+        $emails = [];
+        foreach ((array) $candidates as $candidate) {
+            $email = strtolower(trim(sanitize_text_field($candidate)));
+            if (is_email($email)) {
+                $emails[$email] = true;
+            }
+        }
+        $emails = array_keys($emails);
+        if (!$emails) {
+            wp_send_json_error(['message' => 'Enter at least one valid email address.']);
+        }
+
+        $recipients = array_map(static fn(string $email): array => [
+            'email' => $email,
+            'name' => 'there',
+            'sources' => ['manual'],
+        ], $emails);
+
+        $titles = array_filter(array_map(static function ($id) {
+            $post = get_post($id);
+            return $post ? wp_specialchars_decode(get_the_title($post), ENT_QUOTES) : '';
+        }, $published_ids));
+
+        $batch_id = wp_generate_password(20, false, false);
+        set_transient(self::BATCH_TRANSIENT_PREFIX . $batch_id, [
+            'subject' => self::digest_subject($published_ids),
+            'body' => self::assemble_digest_html($published_ids),
+            'recipients' => $recipients,
+            'targets' => sprintf('Manual list (%d address%s)', count($emails), count($emails) === 1 ? '' : 'es'),
+            'announcement_ids' => $published_ids,
+            'announcement_titles' => implode(', ', $titles),
+            'sent' => 0,
+            'failed' => 0,
+            'next_offset' => 0,
+        ], self::BATCH_TTL);
+
+        wp_send_json_success([
+            'batch_id' => $batch_id,
+            'total' => count($emails),
+        ]);
+    }
+
     public static function ajax_send_batch(): void {
         self::guard_ajax();
         $batch_id = isset($_POST['batch_id']) ? sanitize_text_field(wp_unslash($_POST['batch_id'])) : '';
@@ -701,6 +759,24 @@ final class TN_Announcements {
                 <div id="tn_an_status" style="margin-top:8px;"></div>
             </div>
 
+            <div class="card" style="max-width:900px;margin-top:20px;padding:20px 24px;">
+                <h2 style="margin-top:0;">Send (or resend) to specific addresses</h2>
+                <p class="description">Sends the announcement(s) checked above to exactly the addresses you list here, instead of the automatic audience &mdash; useful for resending to addresses a prior send didn&#8217;t reach (check Workspace&#8217;s Email Log Search to find who&#8217;s still missing one).</p>
+                <p>
+                    <label for="tn_an_manual_emails">Email addresses (one per line, or separated by commas)</label><br>
+                    <textarea id="tn_an_manual_emails" rows="6" class="large-text code" placeholder="jane@example.com&#10;john@example.com"></textarea>
+                </p>
+                <p>
+                    <button type="button" class="button button-primary" id="tn_an_manual_send_btn">Send to these addresses</button>
+                    <button type="button" class="button" id="tn_an_manual_resume_btn" style="display:none;">Resume interrupted send</button>
+                </p>
+                <div id="tn_an_manual_progress" style="display:none;margin-top:12px;">
+                    <progress id="tn_an_manual_progress_bar" value="0" max="1" style="width:100%;"></progress>
+                    <p id="tn_an_manual_progress_text"></p>
+                </div>
+                <div id="tn_an_manual_status" style="margin-top:8px;"></div>
+            </div>
+
             <h2 style="margin-top:28px;">Recent sends</h2>
             <table class="wp-list-table widefat fixed striped" style="max-width:1100px;">
                 <thead><tr><th>Date</th><th>Sent by</th><th>Announcements</th><th>Targeted</th><th>Recipients</th><th>Failed</th></tr></thead>
@@ -777,69 +853,98 @@ final class TN_Announcements {
                     .then(function (r) { return r.json(); });
             }
 
-            function setStatus(message, isError) {
-                var el = document.getElementById('tn_an_status');
-                el.textContent = message;
-                el.style.color = isError ? '#a00' : '#008a20';
-            }
+            // Both the audience-based "Send digest" flow and the manual
+            // "Send to specific addresses" flow share the same prepare→batch
+            // AJAX mechanics, just with their own DOM elements and localStorage
+            // key so an interrupted send in one doesn't collide with the other.
+            function makeSendController(idPrefix, storageKey) {
+                var sendBtn = document.getElementById(idPrefix + '_send_btn');
+                var resumeBtn = document.getElementById(idPrefix + '_resume_btn');
+                var progress = document.getElementById(idPrefix + '_progress');
+                var bar = document.getElementById(idPrefix + '_progress_bar');
+                var text = document.getElementById(idPrefix + '_progress_text');
+                var statusEl = document.getElementById(idPrefix + '_status');
 
-            function rememberBatch(batchId, total) {
-                try {
-                    window.localStorage.setItem(storedBatchKey, JSON.stringify({ batch_id: batchId, total: total }));
-                } catch (e) {}
-            }
-
-            function forgetBatch() {
-                try { window.localStorage.removeItem(storedBatchKey); } catch (e) {}
-                document.getElementById('tn_an_resume_btn').style.display = 'none';
-            }
-
-            function readRememberedBatch() {
-                try {
-                    var value = JSON.parse(window.localStorage.getItem(storedBatchKey) || 'null');
-                    return value && value.batch_id ? value : null;
-                } catch (e) {
-                    return null;
+                function setStatus(message, isError) {
+                    statusEl.textContent = message;
+                    statusEl.style.color = isError ? '#a00' : '#008a20';
                 }
-            }
 
-            function runBatch(batchId, total) {
-                var progress = document.getElementById('tn_an_progress');
-                var bar = document.getElementById('tn_an_progress_bar');
-                var text = document.getElementById('tn_an_progress_text');
-                progress.style.display = 'block';
-                bar.max = total;
-                document.getElementById('tn_an_send_btn').disabled = true;
-                document.getElementById('tn_an_resume_btn').style.display = 'none';
-
-                function step() {
-                    post('tn_announcements_send_batch', { batch_id: batchId }).then(function (res) {
-                        if (!res.success) {
-                            setStatus(res.data && res.data.message ? res.data.message : 'The send stopped early.', true);
-                            document.getElementById('tn_an_send_btn').disabled = false;
-                            document.getElementById('tn_an_resume_btn').style.display = 'inline-block';
-                            return;
-                        }
-                        bar.value = res.data.sent + res.data.failed;
-                        text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + '…';
-                        if (res.data.done) {
-                            forgetBatch();
-                            text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + '.';
-                            setStatus('Send complete.');
-                            document.getElementById('tn_an_send_btn').disabled = false;
-                            window.location.reload();
-                        } else {
-                            // Deliberately slow: see BATCH_SIZE's comment in the PHP class for why.
-                            window.setTimeout(step, 6000);
-                        }
-                    }).catch(function () {
-                        setStatus('The browser lost contact with the server. Use “Resume interrupted send” to continue safely.', true);
-                        document.getElementById('tn_an_send_btn').disabled = false;
-                        document.getElementById('tn_an_resume_btn').style.display = 'inline-block';
-                    });
+                function rememberBatch(batchId, total) {
+                    try {
+                        window.localStorage.setItem(storageKey, JSON.stringify({ batch_id: batchId, total: total }));
+                    } catch (e) {}
                 }
-                step();
+
+                function forgetBatch() {
+                    try { window.localStorage.removeItem(storageKey); } catch (e) {}
+                    resumeBtn.style.display = 'none';
+                }
+
+                function readRememberedBatch() {
+                    try {
+                        var value = JSON.parse(window.localStorage.getItem(storageKey) || 'null');
+                        return value && value.batch_id ? value : null;
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                function runBatch(batchId, total) {
+                    progress.style.display = 'block';
+                    bar.max = total;
+                    sendBtn.disabled = true;
+                    resumeBtn.style.display = 'none';
+
+                    function step() {
+                        post('tn_announcements_send_batch', { batch_id: batchId }).then(function (res) {
+                            if (!res.success) {
+                                setStatus(res.data && res.data.message ? res.data.message : 'The send stopped early.', true);
+                                sendBtn.disabled = false;
+                                resumeBtn.style.display = 'inline-block';
+                                return;
+                            }
+                            bar.value = res.data.sent + res.data.failed;
+                            text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + '…';
+                            if (res.data.done) {
+                                forgetBatch();
+                                text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + '.';
+                                setStatus('Send complete.');
+                                sendBtn.disabled = false;
+                                window.location.reload();
+                            } else {
+                                // Deliberately slow: see BATCH_SIZE's comment in the PHP class for why.
+                                window.setTimeout(step, 6000);
+                            }
+                        }).catch(function () {
+                            setStatus('The browser lost contact with the server. Use “Resume interrupted send” to continue safely.', true);
+                            sendBtn.disabled = false;
+                            resumeBtn.style.display = 'inline-block';
+                        });
+                    }
+                    step();
+                }
+
+                resumeBtn.addEventListener('click', function () {
+                    var batch = readRememberedBatch();
+                    if (!batch) {
+                        forgetBatch();
+                        setStatus('No interrupted send was found.', true);
+                        return;
+                    }
+                    setStatus('Resuming send…');
+                    runBatch(batch.batch_id, batch.total);
+                });
+
+                if (readRememberedBatch()) {
+                    resumeBtn.style.display = 'inline-block';
+                }
+
+                return { setStatus: setStatus, rememberBatch: rememberBatch, runBatch: runBatch };
             }
+
+            var mainCtrl = makeSendController('tn_an', storedBatchKey);
+            var manualCtrl = makeSendController('tn_an_manual', 'tn_announcements_manual_active_batch');
 
             function describeCounts(c) {
                 var parts = c.products.filter(function (p) { return p.count > 0; }).map(function (p) {
@@ -862,73 +967,85 @@ final class TN_Announcements {
             document.getElementById('tn_an_test_btn').addEventListener('click', function () {
                 var sel = selection();
                 if (!sel.announcement_ids.length) {
-                    setStatus('Select at least one announcement first.', true);
+                    mainCtrl.setStatus('Select at least one announcement first.', true);
                     return;
                 }
-                setStatus('Sending test…');
+                mainCtrl.setStatus('Sending test…');
                 post('tn_announcements_test', sel).then(function (res) {
-                    setStatus(res.success ? res.data.message : (res.data && res.data.message) || 'Could not send test email.', !res.success);
+                    mainCtrl.setStatus(res.success ? res.data.message : (res.data && res.data.message) || 'Could not send test email.', !res.success);
                 });
             });
 
             document.getElementById('tn_an_send_btn').addEventListener('click', function () {
                 var sel = selection();
                 if (!sel.announcement_ids.length) {
-                    setStatus('Select at least one announcement first.', true);
+                    mainCtrl.setStatus('Select at least one announcement first.', true);
                     return;
                 }
                 if (!sel.product_ids.length && !sel.allocated) {
-                    setStatus('Select at least one product or include allocated tickets.', true);
+                    mainCtrl.setStatus('Select at least one product or include allocated tickets.', true);
                     return;
                 }
                 if (!document.getElementById('tn_an_send_confirm').checked) {
-                    setStatus('Confirm the announcements and recipient preview before sending.', true);
+                    mainCtrl.setStatus('Confirm the announcements and recipient preview before sending.', true);
                     return;
                 }
-                setStatus('');
+                mainCtrl.setStatus('');
                 post('tn_announcements_preview', sel).then(function (res) {
-                    if (!res.success) { setStatus(res.data && res.data.message ? res.data.message : 'Could not check recipients.', true); return; }
+                    if (!res.success) { mainCtrl.setStatus(res.data && res.data.message ? res.data.message : 'Could not check recipients.', true); return; }
                     var total = res.data.total;
-                    if (total < 1) { setStatus('No matching attendees were found.', true); return; }
+                    if (total < 1) { mainCtrl.setStatus('No matching attendees were found.', true); return; }
                     var estMinutes = Math.max(1, Math.round((total / 2) * 6.5 / 60));
                     if (!window.confirm('Send this digest to ' + total + ' attendee(s)? This cannot be undone.\n\nSent gradually (2 at a time, a few seconds apart) to avoid tripping spam/rate-limit protections — expect roughly ' + estMinutes + ' minute(s). Keep this tab open until it finishes.')) return;
 
-                    var progress = document.getElementById('tn_an_progress');
-                    var bar = document.getElementById('tn_an_progress_bar');
-                    var text = document.getElementById('tn_an_progress_text');
-                    progress.style.display = 'block';
-                    bar.value = 0;
-                    bar.max = total;
-                    text.textContent = 'Preparing send…';
+                    document.getElementById('tn_an_progress').style.display = 'block';
+                    document.getElementById('tn_an_progress_text').textContent = 'Preparing send…';
                     document.getElementById('tn_an_send_btn').disabled = true;
 
                     post('tn_announcements_prepare', sel).then(function (res) {
                         if (!res.success) {
-                            setStatus(res.data && res.data.message ? res.data.message : 'Could not start the send.', true);
+                            mainCtrl.setStatus(res.data && res.data.message ? res.data.message : 'Could not start the send.', true);
                             document.getElementById('tn_an_send_btn').disabled = false;
                             return;
                         }
                         var batchId = res.data.batch_id;
-                        rememberBatch(batchId, total);
-                        runBatch(batchId, total);
+                        mainCtrl.rememberBatch(batchId, total);
+                        mainCtrl.runBatch(batchId, total);
                     });
                 });
             });
 
-            document.getElementById('tn_an_resume_btn').addEventListener('click', function () {
-                var batch = readRememberedBatch();
-                if (!batch) {
-                    forgetBatch();
-                    setStatus('No interrupted send was found.', true);
+            document.getElementById('tn_an_manual_send_btn').addEventListener('click', function () {
+                var announcementIds = Array.prototype.map.call(
+                    document.querySelectorAll('.tn_an_announcement_cb:checked'),
+                    function (cb) { return cb.value; }
+                );
+                if (!announcementIds.length) {
+                    manualCtrl.setStatus('Select at least one announcement above first.', true);
                     return;
                 }
-                setStatus('Resuming send…');
-                runBatch(batch.batch_id, batch.total);
-            });
+                var raw = document.getElementById('tn_an_manual_emails').value;
+                var emails = raw.split(/[\s,]+/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+                var uniqueEmails = Array.from(new Set(emails));
+                if (!uniqueEmails.length) {
+                    manualCtrl.setStatus('Enter at least one email address.', true);
+                    return;
+                }
+                if (!window.confirm('Send to these ' + uniqueEmails.length + ' address(es)? This cannot be undone.\n\n' + uniqueEmails.join(', '))) return;
 
-            if (readRememberedBatch()) {
-                document.getElementById('tn_an_resume_btn').style.display = 'inline-block';
-            }
+                manualCtrl.setStatus('Preparing send…');
+                document.getElementById('tn_an_manual_send_btn').disabled = true;
+                post('tn_announcements_prepare_manual', { announcement_ids: announcementIds, manual_emails: uniqueEmails.join('\n') }).then(function (res) {
+                    if (!res.success) {
+                        manualCtrl.setStatus(res.data && res.data.message ? res.data.message : 'Could not start the send.', true);
+                        document.getElementById('tn_an_manual_send_btn').disabled = false;
+                        return;
+                    }
+                    var total = res.data.total;
+                    manualCtrl.rememberBatch(res.data.batch_id, total);
+                    manualCtrl.runBatch(res.data.batch_id, total);
+                });
+            });
         }());
         </script>
         <?php
