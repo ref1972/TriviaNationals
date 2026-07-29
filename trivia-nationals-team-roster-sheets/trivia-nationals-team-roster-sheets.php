@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Team Roster Google Sheets Sync
  * Description: Keeps the TN26 Team Roster Google Sheet synchronized with WordPress team assignments.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Trivia Nationals
  */
 
@@ -237,6 +237,7 @@ final class TN_Team_Roster_Sheets_Sync {
 					'team_name' => $team_name !== '' ? $team_name : 'Unnamed team',
 					'captain' => tn_tde_signup_meta_value( $signup_id, 'name' ),
 					'player_names' => implode( ', ', $player_names ),
+					'current_player_count' => count( $assigned_ids ),
 					'contact_email' => tn_tde_signup_meta_value( $signup_id, 'email' ),
 					'event' => $event_title,
 					'flight' => tn_tde_signup_meta_value( $signup_id, 'flight' ),
