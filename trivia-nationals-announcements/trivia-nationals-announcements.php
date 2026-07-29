@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -370,7 +370,10 @@ final class TN_Announcements {
             if (!$post || $post->post_type !== self::POST_TYPE || $post->post_status !== 'publish') {
                 continue;
             }
-            $section = '<h2 style="margin:24px 0 8px;color:#17406f;">' . esc_html(get_the_title($post)) . '</h2>';
+            // get_the_title() already runs through wptexturize/convert_chars, which encode
+            // entities like &#038; for HTML display — wrapping in esc_html() here would
+            // double-encode them (visibly showing "&#038;" instead of "&"), so echo as-is.
+            $section = '<h2 style="margin:24px 0 8px;color:#17406f;">' . get_the_title($post) . '</h2>';
             $teaser = trim((string) $post->post_excerpt);
             if ($teaser !== '') {
                 $section .= '<p style="font-style:italic;color:#555;margin:0 0 12px;">' . esc_html($teaser) . '</p>';
@@ -396,7 +399,9 @@ final class TN_Announcements {
         foreach ($announcement_ids as $id) {
             $post = get_post($id);
             if ($post && $post->post_type === self::POST_TYPE) {
-                $titles[] = get_the_title($post);
+                // The email subject is plain text, not HTML, so decode any entities
+                // get_the_title() introduced (e.g. "&#038;" back to a literal "&").
+                $titles[] = wp_specialchars_decode(get_the_title($post), ENT_QUOTES);
             }
         }
         if (!$titles) {
@@ -459,7 +464,8 @@ final class TN_Announcements {
 
         $titles = array_filter(array_map(static function ($id) {
             $post = get_post($id);
-            return $post ? get_the_title($post) : '';
+            // Log field is plain text, decode any entities get_the_title() introduced.
+            return $post ? wp_specialchars_decode(get_the_title($post), ENT_QUOTES) : '';
         }, $published_ids));
 
         $batch_id = wp_generate_password(20, false, false);
@@ -610,7 +616,7 @@ final class TN_Announcements {
                                         ?>
                                         <label style="display:block;padding:6px 0;border-bottom:1px solid #f0f0f1;">
                                             <input type="checkbox" class="tn_an_announcement_cb" value="<?php echo esc_attr((string) $announcement->ID); ?>">
-                                            <strong><?php echo esc_html(get_the_title($announcement)); ?></strong>
+                                            <strong><?php echo get_the_title($announcement); ?></strong>
                                             <?php if ($teaser): ?><br><span style="color:#666;margin-left:24px;"><?php echo esc_html(wp_trim_words($teaser, 16)); ?></span><?php endif; ?>
                                             <br><span style="color:#999;font-size:12px;margin-left:24px;">
                                                 <?php echo $last_sent ? 'Last sent ' . esc_html(mysql2date('M j, Y g:ia', (string) $last_sent)) : 'Never sent'; ?>
@@ -943,7 +949,7 @@ final class TN_Announcements {
                         ?>
                         <li data-id="<?php echo esc_attr((string) $announcement->ID); ?>" style="padding:10px 14px;border-bottom:1px solid #f0f0f1;cursor:move;background:#fff;">
                             <span style="color:#999;margin-right:8px;" aria-hidden="true">&#9776;</span>
-                            <strong><?php echo esc_html(get_the_title($announcement)); ?></strong>
+                            <strong><?php echo get_the_title($announcement); ?></strong>
                             <?php if ($is_draft): ?><span style="margin-left:8px;padding:1px 8px;border-radius:3px;background:#f0f0f1;color:#646970;font-size:11px;text-transform:uppercase;">Draft</span><?php endif; ?>
                         </li>
                     <?php endforeach; ?>
@@ -1239,7 +1245,7 @@ final class TN_Announcements {
                         $teaser = trim((string) $announcement->post_excerpt);
                         ?>
                         <article class="tn-announcement-public">
-                            <h2><?php echo esc_html(get_the_title($announcement)); ?></h2>
+                            <h2><?php echo get_the_title($announcement); ?></h2>
                             <?php if ($teaser): ?>
                                 <p class="tn-announcement-teaser"><?php echo esc_html($teaser); ?></p>
                             <?php endif; ?>
