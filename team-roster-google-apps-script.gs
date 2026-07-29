@@ -6,7 +6,8 @@ const ROSTER_HEADERS = [
   'Captain',
   'Player Names',
   'Contact Email',
-  'Division',
+  'Event',
+  'Flight',
   'Status',
   'Last Updated',
 ];
@@ -35,7 +36,8 @@ function doPost(e) {
         rosterText_(row.captain),
         rosterText_(row.player_names),
         rosterText_(row.contact_email),
-        rosterText_(row.division),
+        rosterText_(row.event),
+        rosterText_(row.flight),
         rosterText_(row.status),
         rosterDate_(row.last_updated),
       ]);
