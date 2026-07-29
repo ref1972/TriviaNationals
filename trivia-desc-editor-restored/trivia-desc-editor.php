@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.3
+ * Version: 3.4
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -8524,9 +8524,10 @@ add_action( 'admin_post_tn_tde_export_team_rosters_csv', function() {
 	header( 'Content-Disposition: attachment; filename="team-rosters-' . gmdate( 'Y-m-d' ) . '.csv"' );
 
 	$out = fopen( 'php://output', 'w' );
-	fputcsv( $out, [ 'Event', 'Team Name', 'Captain', 'Player Name' ] );
+	fputcsv( $out, [ 'Event', 'Flight', 'Team Name', 'Captain', 'Player Name' ] );
 	foreach ( tn_tde_team_signup_admin_rows() as $event_title => $signup_ids ) {
 		foreach ( $signup_ids as $signup_id ) {
+			$flight = tn_tde_signup_meta_value( $signup_id, 'flight' );
 			$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
 			$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
 			$assigned_ids = tn_tde_signup_assigned_player_ids( $signup_id );
@@ -8535,10 +8536,10 @@ add_action( 'admin_post_tn_tde_export_team_rosters_csv', function() {
 				if ( in_array( $person['id'], $assigned_ids, true ) ) $names[] = $person['name'];
 			}
 			if ( ! $names ) {
-				fputcsv( $out, [ $event_title, $team_name ?: 'Unnamed team', $captain, '' ] );
+				fputcsv( $out, [ $event_title, $flight, $team_name ?: 'Unnamed team', $captain, '' ] );
 			} else {
 				foreach ( $names as $name ) {
-					fputcsv( $out, [ $event_title, $team_name ?: 'Unnamed team', $captain, $name ] );
+					fputcsv( $out, [ $event_title, $flight, $team_name ?: 'Unnamed team', $captain, $name ] );
 				}
 			}
 		}
