@@ -15,11 +15,12 @@ Last human review: 2026-07-29.
   Preferred Name per seat on multi-quantity ticket orders. A reusable
   **"Ticket Names"** admin screen (WooCommerce menu) edits any order's
   per-seat Preferred Name directly.
-- Event Schedule Manager v3.3 adds a team roster picker for team-based event
+- Event Schedule Manager v3.4 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
   event with a player count and an editable Team Name field, driving one
   shared picker panel, plus a per-event summary table of Total Teams/Total
-  Players/solo-team count), a "Export All Rosters (CSV)" download, a public
+  Players/solo-team count), a "Export All Rosters (CSV)" download (including
+  a Flight column, added 2026-07-29), a public
   `/team-rosters/` page listing every team event's teams/captains/players
   (no emails, cached via a transient invalidated on roster/status/create
   writes so the page loads quickly), and a captain-facing "Choose Team
@@ -46,6 +47,25 @@ Last human review: 2026-07-29.
   `marketing@` are Workspace aliases on the `info@` user with Gmail filters
   forwarding externally, replicating the old HostGator forwarders. See
   docs/HANDOFF.md and docs/DECISIONS.md for details and remaining gaps.
+- **Announcements plugin (`trivia-nationals-announcements/`) is live at
+  v0.4.1** (deployed and hash-verified 2026-07-29; **not yet committed to
+  Git** — see docs/HANDOFF.md): a native-CPT admin screen for authoring
+  announcements (Title/Teaser/HTML body/Published-Draft), a
+  drag-and-drop **"Reorder"** admin screen, a public `/announcements/`
+  page headed **"News & Notes"** on-site (newest-first, one combined
+  list, no per-announcement permalinks), and a **Send Digest** tool that
+  emails selected announcements' full content (plus a News & Notes link)
+  to the same filtered/deduplicated audience Attendee Email uses, with a
+  ticket-purchase date-range filter, recipient preview, test-send, a
+  manual "Send (or resend) to specific addresses" tool, and a resumable
+  batched real send. Sends go through the same Apps Script relay as other
+  site email, now with per-recipient fallback-path logging and an
+  automatic pause if the Apps Script daily email-service quota is hit
+  mid-batch (see docs/HANDOFF.md's 2026-07-29 entries for the full
+  incident this responded to). CPT/admin/public-page behavior is
+  live-verified end to end; the quota-pause path itself is verified by
+  code inspection and a raw endpoint test, not by triggering it through a
+  real authenticated AJAX batch send.
 - Event Schedule Manager also carries a production-only **"All Trivia: The
   Gathering" waitlist feature** (discovered live on 2026-07-28, now captured
   in Git for the first time) — signup for that event shows a waiting-list
@@ -85,6 +105,16 @@ Last human review: 2026-07-29.
   because doing so would send a real message.
 - Confirm production usage before modifying the separate
   `trivia-nationals-event-schedule/` plugin.
+- A real 182-recipient Announcements digest sent 2026-07-29 had ~76
+  recipients silently fall through to the broken `wp_mail()` fallback
+  after the Apps Script relay's daily email-service quota was exhausted;
+  the resend to still-undelivered addresses (using the new manual resend
+  tool) was deliberately deferred by the user to a later session.
+- Whether/when the Apps Script relay's daily email quota ramps up from its
+  apparent low initial allowance toward Workspace's documented 1,500/day
+  ceiling has not been independently confirmed (e.g. via
+  `MailApp.getRemainingDailyQuota()`); the current understanding rests on
+  a raw error message and secondary sources, not a direct quota check.
 
 ## Local artifacts excluded from Git
 

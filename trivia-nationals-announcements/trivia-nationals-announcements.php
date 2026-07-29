@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.3.0
+ * Version: 0.4.1
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -420,15 +420,76 @@ final class TN_Announcements {
         return $titles[0] . $suffix . " \xe2\x80\x94 Trivia Nationals Announcements";
     }
 
-    private static function send_to(string $email, string $subject, string $html): bool {
-        if (function_exists('tn_tde_send_signup_email')) {
-            return (bool) tn_tde_send_signup_email($email, $subject, $html);
+    /**
+     * Calls the Event Signups Apps Script's send_email action directly —
+     * same endpoint/secret as tn_tde_send_email_via_apps_script() in
+     * trivia-desc-editor.php, but returns the actual error text instead of
+     * collapsing every failure into a plain false. send_to() needs this to
+     * specifically recognize a daily-quota exhaustion so it can pause a
+     * batch instead of blindly burning through the rest of it.
+     *
+     * @return array{ok:bool,error:string}
+     */
+    private static function send_via_apps_script(string $to, string $subject, string $html): array {
+        $endpoint = trim((string) get_option('tn_tde_signup_sheets_endpoint'));
+        $secret = trim((string) get_option('tn_tde_signup_sheets_secret'));
+        if (!$endpoint || !$secret) {
+            return ['ok' => false, 'error' => 'Apps Script endpoint/secret not configured.'];
         }
-        return wp_mail($email, $subject, $html, [
+        $response = wp_remote_post($endpoint, [
+            'timeout' => 15,
+            'redirection' => 0,
+            'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
+            'body' => wp_json_encode(['secret' => $secret, 'action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html]),
+        ]);
+        if (is_wp_error($response)) {
+            return ['ok' => false, 'error' => $response->get_error_message()];
+        }
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code >= 300 && $code < 400 && wp_remote_retrieve_header($response, 'location')) {
+            $response = wp_remote_get(wp_remote_retrieve_header($response, 'location'), ['timeout' => 15, 'redirection' => 5]);
+            $code = is_wp_error($response) ? 500 : wp_remote_retrieve_response_code($response);
+        }
+        $body = is_wp_error($response) ? '' : wp_remote_retrieve_body($response);
+        $result = json_decode($body, true);
+        if ($code >= 200 && $code < 300 && is_array($result) && !empty($result['ok'])) {
+            return ['ok' => true, 'error' => ''];
+        }
+        $error = is_array($result) && !empty($result['error']) ? (string) $result['error'] : ('Unknown error (HTTP ' . $code . ').');
+        return ['ok' => false, 'error' => $error];
+    }
+
+    /**
+     * This matters because when the relay call fails (a quota hit, a
+     * network hiccup, anything), the previously-used tn_tde_send_signup_email()
+     * wrapper silently falls back to wp_mail(), which returns true on this
+     * host even when the message is dropped — so "sent" alone doesn't mean
+     * "reliably sent." Confirmed live on 2026-07-29: of a 182-recipient
+     * send, only 106 actually reached Gmail (per Workspace's own logs); the
+     * other ~76 almost certainly fell through this exact fallback unnoticed,
+     * and the direct cause was confirmed to be "Service invoked too many
+     * times for one day: email." — this is Apps Script's own internal
+     * quota for the MailApp/GmailApp "email" service (tracked per
+     * script-owning account), not Gmail-level account throttling. Workspace
+     * accounts are documented to top out at 1,500/day for this quota, but
+     * new accounts are commonly granted a much lower allowance (sometimes
+     * ~100) before it ramps up — separate from the SMTP-level send
+     * throttling found earlier in the same investigation.
+     *
+     * @return array{ok:bool,via:string,quota_exhausted:bool} via is 'apps_script' or 'wp_mail_fallback'
+     */
+    private static function send_to(string $email, string $subject, string $html): array {
+        $relay = self::send_via_apps_script($email, $subject, $html);
+        if ($relay['ok']) {
+            return ['ok' => true, 'via' => 'apps_script', 'quota_exhausted' => false];
+        }
+        $quota_exhausted = stripos($relay['error'], 'too many times') !== false || stripos($relay['error'], 'quota') !== false;
+        $ok = wp_mail($email, $subject, $html, [
             'From: Trivia Nationals <info@trivianationals.org>',
             'Reply-To: Trivia Nationals <info@trivianationals.org>',
             'Content-Type: text/html; charset=UTF-8',
         ]);
+        return ['ok' => (bool) $ok, 'via' => 'wp_mail_fallback', 'quota_exhausted' => $quota_exhausted];
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -561,18 +622,41 @@ final class TN_Announcements {
             wp_send_json_error(['message' => 'This send has expired. Please start again.']);
         }
 
+        if (!isset($batch['fallback_emails']) || !is_array($batch['fallback_emails'])) {
+            $batch['fallback_emails'] = [];
+        }
+
         $offset = max(0, absint($batch['next_offset'] ?? 0));
         $slice = array_slice($batch['recipients'], $offset, self::BATCH_SIZE);
         foreach ($slice as $index => $recipient) {
-            $ok = self::send_to($recipient['email'], $batch['subject'], $batch['body']);
-            if ($ok) {
+            $result = self::send_to($recipient['email'], $batch['subject'], $batch['body']);
+            if ($result['ok']) {
                 $batch['sent']++;
             } else {
                 $batch['failed']++;
             }
+            if ($result['via'] === 'wp_mail_fallback') {
+                // Fell through to the unreliable host mailer -- reported as
+                // "sent" if wp_mail() returned true, but that's not proof it
+                // actually arrived (see send_to()'s docblock).
+                $batch['fallback_emails'][] = $recipient['email'];
+            }
             $batch['next_offset']++;
             // Persist after every recipient so a retried request continues instead of resending.
             set_transient($key, $batch, self::BATCH_TTL);
+
+            if (!empty($result['quota_exhausted'])) {
+                // Every remaining recipient would fail the exact same way
+                // right now, so stop here instead of burning through the
+                // rest of the batch via the unreliable fallback mailer. The
+                // transient is already saved at the current offset, so
+                // "Resume interrupted send" picks up cleanly once the quota
+                // resets (typically around midnight Pacific Time).
+                wp_send_json_error([
+                    'message' => 'The Apps Script relay\'s daily sending quota was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. It typically resets around midnight Pacific Time — use "Resume interrupted send" after that to continue.',
+                ]);
+            }
+
             if ($index < count($slice) - 1) {
                 usleep(self::BATCH_INTER_SEND_USLEEP);
             }
@@ -584,7 +668,7 @@ final class TN_Announcements {
 
         if ($done) {
             delete_transient($key);
-            self::append_log($batch['announcement_titles'] ?? '', $batch['targets'] ?? '', $total, $batch['sent'], $batch['failed']);
+            self::append_log($batch['announcement_titles'] ?? '', $batch['targets'] ?? '', $total, $batch['sent'], $batch['failed'], $batch['fallback_emails']);
             self::mark_announcements_sent($batch['announcement_ids'] ?? []);
         } else {
             set_transient($key, $batch, self::BATCH_TTL);
@@ -596,6 +680,7 @@ final class TN_Announcements {
             'total' => $total,
             'next_offset' => $next_offset,
             'done' => $done,
+            'fallback_count' => count($batch['fallback_emails']),
         ]);
     }
 
@@ -609,16 +694,18 @@ final class TN_Announcements {
         if (!$user || !is_email($user->user_email)) {
             wp_send_json_error(['message' => 'Your account has no usable email address.']);
         }
-        $ok = self::send_to($user->user_email, '[TEST] ' . self::digest_subject($published_ids), self::assemble_digest_html($published_ids));
-        if ($ok) {
-            wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . '.']);
+        $result = self::send_to($user->user_email, '[TEST] ' . self::digest_subject($published_ids), self::assemble_digest_html($published_ids));
+        if ($result['ok']) {
+            $note = $result['via'] === 'wp_mail_fallback' ? ' (via the fallback mailer, not the usual relay — worth confirming it actually arrived)' : '';
+            wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . $note . '.']);
         }
         wp_send_json_error(['message' => 'The test email could not be sent.']);
     }
 
     // ─── Sent tracking ───────────────────────────────────────────────────────
 
-    private static function append_log(string $announcement_titles, string $targets, int $total, int $sent, int $failed): void {
+    /** @param string[] $fallback_emails addresses that fell through to wp_mail() instead of the Apps Script relay */
+    private static function append_log(string $announcement_titles, string $targets, int $total, int $sent, int $failed, array $fallback_emails = []): void {
         $log = get_option(self::LOG_OPTION, []);
         if (!is_array($log)) {
             $log = [];
@@ -631,6 +718,7 @@ final class TN_Announcements {
             'total' => $total,
             'sent' => $sent,
             'failed' => $failed,
+            'fallback_emails' => array_values($fallback_emails),
         ];
         $log = array_slice($log, -self::LOG_LIMIT);
         update_option(self::LOG_OPTION, $log, false);
@@ -778,12 +866,15 @@ final class TN_Announcements {
             </div>
 
             <h2 style="margin-top:28px;">Recent sends</h2>
-            <table class="wp-list-table widefat fixed striped" style="max-width:1100px;">
-                <thead><tr><th>Date</th><th>Sent by</th><th>Announcements</th><th>Targeted</th><th>Recipients</th><th>Failed</th></tr></thead>
+            <p class="description">"Via fallback" counts recipients whose message couldn't reach the Apps Script/Gmail relay and fell through to this host's local mailer instead &mdash; that path is known to sometimes silently drop messages, so a non-zero count here is worth treating as "unconfirmed," not "delivered."</p>
+            <table class="wp-list-table widefat fixed striped" style="max-width:1200px;">
+                <thead><tr><th>Date</th><th>Sent by</th><th>Announcements</th><th>Targeted</th><th>Recipients</th><th>Failed</th><th>Via fallback</th></tr></thead>
                 <tbody>
                 <?php if (!$log): ?>
-                    <tr><td colspan="6">No digests have been sent yet.</td></tr>
-                <?php else: foreach ($log as $entry): ?>
+                    <tr><td colspan="7">No digests have been sent yet.</td></tr>
+                <?php else: foreach ($log as $entry):
+                    $fallback_emails = is_array($entry['fallback_emails'] ?? null) ? $entry['fallback_emails'] : [];
+                    ?>
                     <tr>
                         <td><?php echo esc_html($entry['time'] ?? ''); ?></td>
                         <td><?php echo esc_html($entry['user'] ?? ''); ?></td>
@@ -791,6 +882,16 @@ final class TN_Announcements {
                         <td><?php echo esc_html($entry['targets'] ?? ''); ?></td>
                         <td><?php echo esc_html((string) ($entry['sent'] ?? 0)) . ' / ' . esc_html((string) ($entry['total'] ?? 0)); ?></td>
                         <td><?php echo esc_html((string) ($entry['failed'] ?? 0)); ?></td>
+                        <td>
+                            <?php if (!$fallback_emails): ?>
+                                0
+                            <?php else: ?>
+                                <details>
+                                    <summary style="cursor:pointer;color:#a00;font-weight:600;"><?php echo esc_html((string) count($fallback_emails)); ?></summary>
+                                    <textarea readonly rows="4" class="widefat code" style="margin-top:6px;font-size:11px;" onclick="this.select();"><?php echo esc_textarea(implode("\n", $fallback_emails)); ?></textarea>
+                                </details>
+                            <?php endif; ?>
+                        </td>
                     </tr>
                 <?php endforeach; endif; ?>
                 </tbody>
@@ -905,10 +1006,10 @@ final class TN_Announcements {
                                 return;
                             }
                             bar.value = res.data.sent + res.data.failed;
-                            text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + '…';
+                            text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + (res.data.fallback_count ? (' (' + res.data.fallback_count + ' via fallback mailer)') : '') + '…';
                             if (res.data.done) {
                                 forgetBatch();
-                                text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + '.';
+                                text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + (res.data.fallback_count ? (', ' + res.data.fallback_count + ' via fallback mailer (see Recent sends below)') : '') + '.';
                                 setStatus('Send complete.');
                                 sendBtn.disabled = false;
                                 window.location.reload();

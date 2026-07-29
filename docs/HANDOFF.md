@@ -188,6 +188,125 @@ Last updated: 2026-07-29.
     goes through HostGator's broken local `mail()`. Two stray Apps Script
     deployments from troubleshooting (under the old personal-account
     project) are still live but unused.
+- 2026-07-29: added the Flight column to the Team Rosters CSV export
+  (Event Schedule Manager, now v3.4). Deployed and hash-verified.
+- 2026-07-29: built and deployed a brand-new **Announcements** plugin
+  (`trivia-nationals-announcements/trivia-nationals-announcements.php`) from
+  scratch, after an explicit requirements Q&A with the user. Unlike the
+  existing `tn_tde_signup`/`tn_alloc_ticket` CPTs (bare shells + custom
+  postmeta), `tn_announcement` uses native `post_title`/`post_content`
+  (via `the_content` filter for shortcode/paragraph processing)/
+  `post_excerpt`/`post_status` — the built-in post editor is the entire
+  authoring UI, no custom fields needed. Ships as v0.1.0 with: an admin CPT
+  screen (Teaser + Last Sent sortable columns), a public `/announcements/`
+  list page (all Published, newest first, no per-announcement permalinks —
+  confirmed a deliberate one-combined-list choice), and a **Send Digest**
+  admin tool that reuses the exact same recipient logic as Attendee Email
+  (product + allocated-ticket checkboxes) plus a new ticket-purchase-date
+  range filter, a recipient-count preview, a send-test-to-self action, and
+  a resumable transient-batched real send with a Recent Sends log (same
+  patterns as Attendee Email throughout). Sends go through the same
+  `tn_tde_send_signup_email()` Apps Script relay (with `wp_mail()` fallback)
+  already verified for signups/tickets/Attendee Email. `php -l` clean,
+  hash-verified live, and live-tested end to end (CPT create/edit, public
+  page rendering including an embedded image, digest preview/test/real
+  send).
+  - Same day, two follow-up features, both live at **v0.2.0**: (1) a
+    drag-and-drop **"Reorder"** admin screen (jQuery UI Sortable, ordering
+    persisted to the native `menu_order` field, both the public page and
+    admin list sorted by it) — the user first hit a real bug where
+    dragging did nothing (the inline `<script>` calling `.sortable()` ran
+    before the enqueued `jquery-ui-sortable` library loaded, since it
+    wasn't wrapped in a DOM-ready handler; confirmed via
+    `jQuery._data(el,'events')` showing no bound click handler before the
+    fix, a bound one after) — fixed by wrapping in `jQuery(function ($)
+    {...})}`, so this shipped as working drag-and-drop, not a fallback to
+    manual numbering; (2) the public page's on-site header was renamed
+    from "Announcements" to **"News & Notes"** (URL unchanged, still
+    `/announcements/`), and the digest email now includes a link back to
+    that page.
+  - 2026-07-29: fixed an ampersand-entity bug the user caught in a real
+    test digest subject (`&#038;` appearing literally instead of `&`).
+    Root cause: `get_the_title()`'s output already runs through
+    `wptexturize()`/`convert_chars()`, which HTML-entity-encodes a literal
+    `&` to `&#038;` — wrapping that in `esc_html()` (as done in 3 HTML
+    contexts) double-encoded it, and using it raw in 3 plain-text contexts
+    (digest subject, log fields) leaked the entity text unrendered. Fixed
+    all 6 locations: `wp_specialchars_decode($title, ENT_QUOTES)` for the
+    plain-text ones, dropped the redundant `esc_html()` for the HTML ones.
+    Live at **v0.2.1**.
+  - 2026-07-29: investigated a serious data-integrity report — the Send
+    Digest screen reported "182/182 sent, 0 failed" for a real digest send,
+    but the user never received their own copy and Google Workspace's
+    Email Log Search (`~/Downloads/LogSearchResults-20260729-0326.csv`,
+    user-provided) showed only ~106 unique recipients actually reaching
+    Gmail for that exact subject, with the rest split across `Transient
+    Error`/no-further-event rows. Ruled out a duplicate/double-send theory
+    initially suspected from a large cluster of Apps Script Executions
+    (`~200 executions over 7 days`, user-pasted) — a ~2-hour timezone
+    display offset between the WordPress dashboard and the Apps Script
+    console had made two views of the *same* burst look like separate
+    events; this was explicitly retracted once minute-by-minute analysis
+    of `GMAIL_INSERTED` timestamps lined up exactly with the Apps Script
+    burst. **Root cause, confirmed via a direct raw `curl` POST to the
+    live Apps Script endpoint**: `{"ok":false,"error":"Service invoked too
+    many times for one day: email."}` — Apps Script's own internal quota
+    for the `MailApp`/`GmailApp` "email" service (tracked per
+    script-owning account) was exhausted. This is **not** Gmail-level
+    account throttling or SMTP-level reputation throttling (a related but
+    separate rate-limiting theme also observed via cross-domain analysis
+    of the stuck recipients); it is Apps Script's own service quota. New
+    Workspace accounts are commonly granted a much lower initial allowance
+    for this quota (sometimes ~100) than the documented 1,500/day ceiling,
+    before it ramps up — not independently confirmed beyond the raw error
+    text and a matching secondary source the user checked (Gemini, citing
+    Google's own support threads), so this remains the best-evidence
+    explanation rather than a fully verified one. The prior `send_to()`
+    wrapper's silent `wp_mail()` fallback (which returns `true` on this
+    host even when a message is actually dropped — see docs/OPERATIONS.md)
+    is what let ~76 recipients "succeed" on screen while never actually
+    being delivered by either path.
+  - Same investigation, with the user's explicit approval, three
+    mitigations shipped:
+    1. **v0.2.2** — slowed all three send-throttling levers significantly
+       (batch size 10→2 recipients per AJAX call, added a 500ms
+       `usleep()` between individual sends within a batch, JS polling
+       delay between batches 350ms→6000ms) to avoid tripping burst-volume
+       abuse heuristics on a brand-new sending domain.
+    2. **v0.3.0** — added a **"Send (or resend) to specific addresses"**
+       manual tool on the Send Digest page: pick already-published
+       announcements, paste a list of specific email addresses, and send
+       just to those — built specifically so the failed/fallback-swept
+       recipients from the 182-recipient send can be resent to later
+       without resending to everyone. The user explicitly deferred
+       actually running a resend until the next day.
+    3. **v0.4.0 → v0.4.1** — added per-recipient success/path logging
+       (`send_to()` now reports `via: 'apps_script'` or
+       `'wp_mail_fallback'` per recipient, surfaced in the Recent Sends
+       log as an expandable "Via fallback" address list) and
+       quota-exhaustion **detection with a graceful batch pause**: a new
+       `send_via_apps_script()` returns the Apps Script relay's actual
+       error text (rather than collapsing every failure to a bare
+       `false`, as the shared `tn_tde_send_email_via_apps_script()`
+       helper does); `send_to()` flags `quota_exhausted` when that error
+       text matches "too many times"/"quota"; `ajax_send_batch()` now
+       stops a batch immediately at that point (rather than blindly
+       burning through the rest of the recipients via the unreliable
+       fallback mailer) with a message explaining the quota typically
+       resets around midnight Pacific and to use "Resume interrupted
+       send" afterward — the batch transient is already saved at the
+       correct offset for that to work cleanly. `php -l` clean,
+       hash-verified live as of 2026-07-29 (v0.4.1). **Not yet
+       committed to Git** — v0.4.0/v0.4.1 exist only as deployed code and
+       an uncommitted local working-tree change; commit only once the
+       user explicitly asks, per this project's standing rule.
+    - Functional verification of the live quota-pause path itself (i.e.
+      actually triggering `wp_send_json_error()`'s pause message through a
+      real AJAX batch call) has **not** been done — that requires an
+      authenticated wp-admin session, which is outside what an agent
+      should do unattended. The underlying detection logic reuses the
+      exact `stripos()` match already confirmed correct against the real
+      Apps Script error text via the raw `curl` test above.
 
 ## Immediate next steps
 
@@ -212,6 +331,20 @@ Last updated: 2026-07-29.
 - If `get_meta($key, false)` comes up again in this codebase, remember it
   returns `WC_Meta_Data` objects, not raw values — extract `->value`
   (see `TN_My_Tickets::meta_values_for_key()` for the defensive pattern).
+- Once the Apps Script quota resets, use the Announcements plugin's new
+  "Send (or resend) to specific addresses" tool to resend the 2026-07-29
+  digest to whichever addresses Email Log Search still shows as
+  undelivered from the original 182-recipient send — the user deferred
+  this deliberately until they were back at the keyboard.
+- Commit and push the Announcements plugin's fallback-tracking/
+  quota-pause change (currently v0.4.1, uncommitted) once the user
+  explicitly confirms — do not commit it proactively.
+- Consider directly confirming the Apps Script `MailApp` daily quota via
+  `MailApp.getRemainingDailyQuota()` (run manually in the Apps Script
+  editor, view the Execution log) rather than relying solely on the raw
+  error text — would confirm whether/when the account's quota has ramped
+  up from its apparent initial low allowance toward the documented
+  1,500/day.
 
 ## Known cautions
 
@@ -228,3 +361,13 @@ Last updated: 2026-07-29.
   deployment.
 - Test-email and attendee-send actions produce real external messages and
   require deliberate authorization.
+- The Apps Script relay used by both `tn_tde_send_signup_email()` and the
+  Announcements plugin's `send_to()` can silently fail over to
+  HostGator's `wp_mail()`, which returns `true` even when a message is
+  actually dropped. Any bulk send should be treated as unverified until
+  cross-checked against Google Workspace's Email Log Search, not just the
+  sender/failure counts shown in the WordPress admin screen.
+- The Announcements plugin (`trivia-nationals-announcements/`) has
+  uncommitted local changes (fallback tracking + quota-exhaustion pause,
+  v0.4.1) that are deployed live but not yet in Git — see the 2026-07-29
+  entries above before assuming Git matches production for this file.

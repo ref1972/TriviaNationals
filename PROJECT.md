@@ -12,7 +12,7 @@ It is also the durable project memory shared by Claude and Codex.
 | Event Schedule Manager | `trivia-desc-editor-restored/` | Main site schedule, event descriptions, event signups, homepage integrations, FAQ/admin tools, and Gmail relay integration |
 | My Tickets | `trivia-nationals-my-tickets/` | Passwordless electronic tickets, printable QR tickets, mobile staff check-in, roster, and allocated tickets |
 | Attendee Email | `trivia-nationals-attendee-email/` | Admin-selected, deduplicated attendee communications based on paid WooCommerce products and allocated tickets |
-| Announcements | `trivia-nationals-announcements/` | Admin-authored announcements (native WP CPT with Title/Teaser/HTML body/Published-Draft status), a public `/announcements/` list page, and a "Send Digest" tool that emails selected announcements' full content to a filtered, deduplicated attendee audience |
+| Announcements | `trivia-nationals-announcements/` | Admin-authored announcements (native WP CPT with Title/Teaser/HTML body/Published-Draft status), a public `/announcements/` list page (headed "News & Notes" on-site, drag-and-drop orderable via a "Reorder" admin screen), and a "Send Digest" tool that emails selected announcements' full content — plus a link back to the News & Notes page — to a filtered, deduplicated attendee audience. Digest sends go through the same Apps Script relay as other site email, falling back to `wp_mail()` only on relay failure, with per-recipient fallback tracking and automatic pause on Apps Script daily-quota exhaustion (see docs/HANDOFF.md) |
 | Event Schedule | `trivia-nationals-event-schedule/` | Separate schedule plugin retained in the repository; confirm live usage before changing or deploying |
 | WooCommerce Google Sheets Sync | `woocommerce-google-sheets-sync/` | Synchronizes WooCommerce order information with Google Sheets |
 | Event Signups Apps Script | `google-apps-script/event-signups/Code.gs` | Google-side integration for event signup data |
@@ -23,10 +23,12 @@ It is also the durable project memory shared by Claude and Codex.
 - `/event-signups/` — attendee event signup page.
 - `/my-tickets/` — passwordless ticket retrieval.
 - `/ticket-check-in/` — mobile-friendly staff QR validation and check-in.
-- `/announcements/` — public list of all Published announcements.
+- `/announcements/` — public list of all Published announcements, headed
+  "News & Notes" on-site, in admin-controlled drag-and-drop order.
 - WordPress **Trivia Nationals → Email Attendees** — attendee email dashboard.
 - WordPress **Announcements** (own top-level menu) — native Add/Edit screens
-  for announcement content and status, plus a **Send Digest** submenu page.
+  for announcement content and status, plus **Send Digest** and **Reorder**
+  submenu pages.
 - WordPress Trivia Nationals ticket admin screens — ticket configuration,
   allocated ticket management, and check-in roster.
 - `scores.trivianationals.org` — static placeholder only; the real scoring

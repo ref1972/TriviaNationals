@@ -27,6 +27,27 @@
   their one-hour transient remains available.
 - The tool has no unsubscribe/marketing-consent suppression list.
 
+## Announcements digest
+
+- Use **Announcements → Send Digest** to email selected Published
+  announcements' full content to a filtered attendee audience (same
+  product/allocated-ticket selection as Email Attendees, plus a
+  ticket-purchase date-range filter).
+- If a batch send stops early with a message about the Apps Script relay's
+  daily quota being reached, it has been paused deliberately, not failed
+  silently — use "Resume interrupted send" after the quota resets
+  (typically around midnight Pacific Time) to continue from where it
+  stopped.
+- The Recent Sends log's "Via fallback" column lists any recipients whose
+  message actually went out through HostGator's `wp_mail()` rather than
+  the Workspace relay — treat those as unconfirmed deliveries and
+  cross-check Google Workspace's Email Log Search before assuming they
+  arrived.
+- Use **Announcements → Send Digest**'s "Send (or resend) to specific
+  addresses" tool to resend just to a known list of addresses (e.g. ones
+  confirmed undelivered in Email Log Search) without resending to
+  everyone else.
+
 ## Site email
 
 - `info@trivianationals.org` is a Google Workspace mailbox; manage it and
