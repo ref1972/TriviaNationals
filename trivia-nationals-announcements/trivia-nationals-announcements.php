@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -19,6 +19,7 @@ final class TN_Announcements {
     private const BATCH_SIZE = 10;
     private const BATCH_TTL = HOUR_IN_SECONDS;
     private const NONCE_ACTION = 'tn_announcements_digest';
+    private const REORDER_NONCE_ACTION = 'tn_announcements_reorder';
     private const CAPABILITY = 'manage_woocommerce';
     private const LAST_SENT_META = '_tn_announcement_last_sent';
 
@@ -30,11 +31,13 @@ final class TN_Announcements {
         add_action('pre_get_posts', [self::class, 'sort_by_last_sent']);
 
         add_action('admin_menu', [self::class, 'add_menu']);
+        add_action('admin_enqueue_scripts', [self::class, 'enqueue_reorder_assets']);
 
         add_action('wp_ajax_tn_announcements_preview', [self::class, 'ajax_preview']);
         add_action('wp_ajax_tn_announcements_prepare', [self::class, 'ajax_prepare']);
         add_action('wp_ajax_tn_announcements_send_batch', [self::class, 'ajax_send_batch']);
         add_action('wp_ajax_tn_announcements_test', [self::class, 'ajax_test']);
+        add_action('wp_ajax_tn_announcements_save_order', [self::class, 'ajax_save_order']);
 
         // Public /announcements/ virtual page.
         add_action('wp', [self::class, 'maybe_unmask_404']);
@@ -121,6 +124,21 @@ final class TN_Announcements {
             'tn-announcements-digest',
             [self::class, 'render_digest_page']
         );
+        add_submenu_page(
+            'edit.php?post_type=' . self::POST_TYPE,
+            'Reorder',
+            'Reorder',
+            'edit_posts',
+            'tn-announcements-reorder',
+            [self::class, 'render_reorder_page']
+        );
+    }
+
+    public static function enqueue_reorder_assets(string $hook): void {
+        if (strpos($hook, 'tn-announcements-reorder') === false) {
+            return;
+        }
+        wp_enqueue_script('jquery-ui-sortable');
     }
 
     // ─── Product catalog (forked from Attendee Email) ──────────────────────
@@ -366,6 +384,8 @@ final class TN_Announcements {
         $html = '<div style="font-family:Arial,sans-serif;color:#222;line-height:1.5;">';
         $html .= '<h1 style="margin:0 0 20px;color:#17406f;">Trivia Nationals 2026</h1>';
         $html .= implode('<hr style="margin:24px 0;border:none;border-top:1px solid #ddd;">', $sections);
+        $html .= '<hr style="margin:24px 0;border:none;border-top:1px solid #ddd;">';
+        $html .= '<p style="font-size:14px;"><a href="' . esc_url(home_url('/announcements/')) . '">Read all announcements on the News &amp; Notes page &rarr;</a></p>';
         $html .= '</div>';
         return $html;
     }
@@ -563,8 +583,7 @@ final class TN_Announcements {
             'post_type' => self::POST_TYPE,
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'date',
-            'order' => 'DESC',
+            'orderby' => ['menu_order' => 'ASC', 'date' => 'DESC'],
             'no_found_rows' => true,
         ]);
         ?>
@@ -897,6 +916,112 @@ final class TN_Announcements {
         <?php
     }
 
+    // ─── Admin: Reorder page ─────────────────────────────────────────────────
+
+    public static function render_reorder_page(): void {
+        if (!current_user_can('edit_posts')) {
+            return;
+        }
+        $nonce = wp_create_nonce(self::REORDER_NONCE_ACTION);
+        $announcements = get_posts([
+            'post_type' => self::POST_TYPE,
+            'post_status' => ['publish', 'draft'],
+            'posts_per_page' => -1,
+            'orderby' => ['menu_order' => 'ASC', 'date' => 'DESC'],
+            'no_found_rows' => true,
+        ]);
+        ?>
+        <div class="wrap">
+            <h1>Reorder Announcements</h1>
+            <p class="description">Drag announcements into the order you want them to appear on the public News &amp; Notes page and in the Send Digest checklist. This does not change Published/Draft status.</p>
+            <?php if (!$announcements): ?>
+                <p>No announcements yet.</p>
+            <?php else: ?>
+                <ul id="tn_an_reorder_list" style="max-width:640px;background:#fff;border:1px solid #dcdcde;margin:16px 0;padding:0;list-style:none;">
+                    <?php foreach ($announcements as $announcement):
+                        $is_draft = $announcement->post_status !== 'publish';
+                        ?>
+                        <li data-id="<?php echo esc_attr((string) $announcement->ID); ?>" style="padding:10px 14px;border-bottom:1px solid #f0f0f1;cursor:move;background:#fff;">
+                            <span style="color:#999;margin-right:8px;" aria-hidden="true">&#9776;</span>
+                            <strong><?php echo esc_html(get_the_title($announcement)); ?></strong>
+                            <?php if ($is_draft): ?><span style="margin-left:8px;padding:1px 8px;border-radius:3px;background:#f0f0f1;color:#646970;font-size:11px;text-transform:uppercase;">Draft</span><?php endif; ?>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+                <p>
+                    <button type="button" class="button button-primary" id="tn_an_save_order_btn" disabled>Save Order</button>
+                    <span id="tn_an_reorder_status" style="margin-left:10px;"></span>
+                </p>
+            <?php endif; ?>
+        </div>
+        <script>
+        jQuery(function ($) {
+            var ajaxUrl = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+            var nonce = <?php echo wp_json_encode($nonce); ?>;
+            var $list = $('#tn_an_reorder_list');
+            var $btn = $('#tn_an_save_order_btn');
+            var $status = $('#tn_an_reorder_status');
+
+            if ($list.length && typeof $list.sortable === 'function') {
+                $list.sortable({
+                    axis: 'y',
+                    update: function () {
+                        $btn.prop('disabled', false);
+                        $status.text('');
+                    },
+                });
+            }
+
+            $btn.on('click', function () {
+                var ids = $list.children('li').map(function () {
+                    return $(this).data('id');
+                }).get();
+                $btn.prop('disabled', true);
+                $status.text('Saving…').css('color', '');
+                var params = new URLSearchParams();
+                params.append('action', 'tn_announcements_save_order');
+                params.append('nonce', nonce);
+                ids.forEach(function (id) { params.append('order[]', id); });
+                fetch(ajaxUrl, { method: 'POST', credentials: 'same-origin', body: params })
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (res.success) {
+                            $status.text('Order saved.').css('color', '#008a20');
+                        } else {
+                            $status.text((res.data && res.data.message) || 'Could not save order.').css('color', '#a00');
+                            $btn.prop('disabled', false);
+                        }
+                    })
+                    .catch(function () {
+                        $status.text('The browser lost contact with the server.').css('color', '#a00');
+                        $btn.prop('disabled', false);
+                    });
+            });
+        });
+        </script>
+        <?php
+    }
+
+    public static function ajax_save_order(): void {
+        check_ajax_referer(self::REORDER_NONCE_ACTION, 'nonce');
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error(['message' => 'You do not have permission to do this.'], 403);
+        }
+        $raw = isset($_POST['order']) ? (array) wp_unslash($_POST['order']) : [];
+        $ids = array_values(array_unique(array_filter(array_map('absint', $raw))));
+        if (!$ids) {
+            wp_send_json_error(['message' => 'Nothing to save.']);
+        }
+        foreach ($ids as $index => $id) {
+            $post = get_post($id);
+            if (!$post || $post->post_type !== self::POST_TYPE) {
+                continue;
+            }
+            wp_update_post(['ID' => $id, 'menu_order' => $index]);
+        }
+        wp_send_json_success(['message' => 'Order saved.']);
+    }
+
     // ─── Public /announcements/ page ─────────────────────────────────────────
 
     public static function is_page_request(): bool {
@@ -920,7 +1045,7 @@ final class TN_Announcements {
 
     public static function filter_document_title(array $parts): array {
         if (self::is_page_request()) {
-            $parts['title'] = 'Announcements';
+            $parts['title'] = 'News & Notes';
         }
         return $parts;
     }
@@ -949,8 +1074,7 @@ final class TN_Announcements {
             'post_type' => self::POST_TYPE,
             'post_status' => 'publish',
             'posts_per_page' => -1,
-            'orderby' => 'date',
-            'order' => 'DESC',
+            'orderby' => ['menu_order' => 'ASC', 'date' => 'DESC'],
             'no_found_rows' => true,
         ]);
         get_header();
@@ -1098,16 +1222,16 @@ final class TN_Announcements {
             </style>
             <div class="tn-signup-nav">
                 <a class="tn-signup-brand" href="<?php echo esc_url(home_url('/')); ?>">Trivia Nationals 2026</a>
-                <nav aria-label="Announcements page navigation">
+                <nav aria-label="News &amp; Notes page navigation">
                     <a href="<?php echo esc_url(home_url('/')); ?>">Home</a>
                     <a href="<?php echo esc_url(home_url('/full-schedule/')); ?>">Full Schedule</a>
                     <a href="<?php echo esc_url(home_url('/event-signups/')); ?>">Signups</a>
-                    <a href="<?php echo esc_url(home_url('/announcements/')); ?>" aria-current="page">Announcements</a>
+                    <a href="<?php echo esc_url(home_url('/announcements/')); ?>" aria-current="page">News &amp; Notes</a>
                 </nav>
             </div>
             <div class="tn-signup-page-inner">
                 <p class="tn-signup-kicker">August 7 - 9, 2026 / Las Vegas</p>
-                <h1>Announcements</h1>
+                <h1>News &amp; Notes</h1>
                 <?php if (!$announcements): ?>
                     <p class="tn-signup-page-intro">No announcements right now &mdash; check back soon.</p>
                 <?php else: ?>
