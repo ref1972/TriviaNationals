@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-07-29 — Migrate site email to Google Workspace
+
+`info@trivianationals.org` is now a real Google Workspace mailbox (MX/SPF/DKIM
+configured), and the Event Signups Apps Script sends natively as that account
+instead of using a personal Gmail account's send-as alias.
+
+Reason: the alias approach still routed every message through HostGator's own
+SMTP server as the alias's delivery method (confirmed via a real bounce), so
+it never actually escaped HostGator's deliverability problems; it was also
+capped at a personal account's 100/day sending quota. Native Workspace
+sending removes both the HostGator dependency and the quota ceiling (raised
+to 1,500/day), ahead of an expected run of bulk attendee emails.
+
 ## 2026-07-27 — Git-backed shared project memory
 
 Claude and Codex share durable knowledge through ordinary Markdown files in

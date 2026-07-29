@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 2.4
+ * Version: 3.3
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -3856,6 +3856,7 @@ function tn_tde_set_signup_ids_status( $signup_ids, $status, $reason = '' ) {
 		tn_tde_sync_event_signup( $signup_id );
 		$count++;
 	}
+	if ( $count > 0 ) tn_tde_invalidate_public_team_rosters_cache();
 	return $count;
 }
 
@@ -4124,6 +4125,7 @@ function tn_tde_create_event_signup( $event, $name, $email, $flight, $team, $tea
 	if ( tn_tde_signup_meta_value( $signup_id, 'sync_status' ) === 'pending' ) {
 		tn_tde_queue_event_signup_sync( (int) $signup_id );
 	}
+	tn_tde_invalidate_public_team_rosters_cache();
 	return $signup_id;
 }
 
@@ -4519,6 +4521,7 @@ function tn_tde_handle_team_roster_save( $signup_id, array $posted_ids ) {
 		$accepted[] = $id;
 	}
 	tn_tde_set_signup_assigned_player_ids( $signup_id, $accepted );
+	tn_tde_invalidate_public_team_rosters_cache();
 	return [ 'ok' => true, 'conflicts' => $conflicts, 'assigned' => $accepted ];
 }
 
@@ -5843,8 +5846,64 @@ add_action( 'template_redirect', function() {
 	exit;
 }, 2 );
 
+/**
+ * Clears the cached data behind the public /team-rosters/ page. Called
+ * from anywhere that changes what that page shows: roster/player saves,
+ * signup status changes (cancel/restore/spam), and new signups.
+ */
+function tn_tde_invalidate_public_team_rosters_cache() {
+	delete_transient( 'tn_tde_public_team_rosters_v1' );
+}
+
+/**
+ * Data for the public /team-rosters/ page: event title => list of
+ * {team_name, captain, names}. Cached in a transient (1 hour safety-net
+ * TTL, normally invalidated immediately by
+ * tn_tde_invalidate_public_team_rosters_cache()) because the page is
+ * public and can get real traffic, unlike the low-traffic admin screen.
+ *
+ * Deliberately does NOT use tn_tde_team_roster_pool() — that function
+ * rebuilds the entire attendee roster (every WooCommerce order + all
+ * allocated tickets) and re-queries for "taken by" state, which is only
+ * needed while someone is actively picking players. This page only needs
+ * to turn each team's already-assigned player ids into display names, so
+ * it builds the attendee roster once and does a plain array lookup per
+ * team instead of rebuilding it once per team.
+ */
+function tn_tde_public_team_rosters_data() {
+	$cached = get_transient( 'tn_tde_public_team_rosters_v1' );
+	if ( is_array( $cached ) ) return $cached;
+
+	$names_by_id = [];
+	if ( function_exists( 'tn_tickets_attendee_roster' ) ) {
+		foreach ( tn_tickets_attendee_roster() as $person ) {
+			$names_by_id[ $person['id'] ] = $person['name'];
+		}
+	}
+
+	$data = [];
+	foreach ( tn_tde_team_signup_admin_rows() as $event_title => $signup_ids ) {
+		$teams = [];
+		foreach ( $signup_ids as $signup_id ) {
+			$names = [];
+			foreach ( tn_tde_signup_assigned_player_ids( $signup_id ) as $player_id ) {
+				if ( isset( $names_by_id[ $player_id ] ) ) $names[] = $names_by_id[ $player_id ];
+			}
+			$teams[] = [
+				'team_name' => tn_tde_signup_meta_value( $signup_id, 'team' ),
+				'captain' => tn_tde_signup_meta_value( $signup_id, 'name' ),
+				'names' => $names,
+			];
+		}
+		$data[ $event_title ] = $teams;
+	}
+
+	set_transient( 'tn_tde_public_team_rosters_v1', $data, HOUR_IN_SECONDS );
+	return $data;
+}
+
 function tn_tde_render_public_team_rosters_page() {
-	$groups = tn_tde_team_signup_admin_rows();
+	$groups = tn_tde_public_team_rosters_data();
 	get_header();
 	?>
 	<main class="tn-signup-page">
@@ -6017,22 +6076,15 @@ function tn_tde_render_public_team_rosters_page() {
 			<?php if ( ! $groups ) : ?>
 				<p class="tn-signup-page-intro">Team rosters haven&#8217;t been posted yet — check back soon.</p>
 			<?php else : ?>
-				<p class="tn-signup-page-intro">Team lineups for every team-based event. Didn&#8217;t make a roster yet? Contact your team captain.</p>
-				<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
+				<?php foreach ( $groups as $event_title => $teams ) : ?>
 					<h2 class="tn-roster-public-event"><?php echo esc_html( $event_title ?: 'Untitled event' ); ?></h2>
 					<div class="tn-roster-public-teams">
-						<?php foreach ( $signup_ids as $signup_id ) :
-							$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
-							$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
-							$assigned_ids = tn_tde_signup_assigned_player_ids( $signup_id );
-							$names = [];
-							foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
-								if ( in_array( $person['id'], $assigned_ids, true ) ) $names[] = $person['name'];
-							}
+						<?php foreach ( $teams as $team ) :
+							$names = $team['names'];
 							?>
 							<div class="tn-roster-public-team">
-								<h3><?php echo esc_html( $team_name ?: 'Unnamed team' ); ?></h3>
-								<p class="tn-roster-public-meta">Captain: <?php echo esc_html( $captain ?: 'unknown' ); ?> &middot; <?php echo esc_html( (string) count( $names ) ); ?> player<?php echo count( $names ) === 1 ? '' : 's'; ?></p>
+								<h3><?php echo esc_html( $team['team_name'] ?: 'Unnamed team' ); ?></h3>
+								<p class="tn-roster-public-meta">Captain: <?php echo esc_html( $team['captain'] ?: 'unknown' ); ?> &middot; <?php echo esc_html( (string) count( $names ) ); ?> player<?php echo count( $names ) === 1 ? '' : 's'; ?></p>
 								<p class="tn-roster-public-players"><?php echo $names ? esc_html( implode( ', ', $names ) ) : 'Roster forming'; ?></p>
 							</div>
 						<?php endforeach; ?>
@@ -8362,6 +8414,30 @@ function tn_tde_team_rosters_page() {
 		<p>
 			<a class="button" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=tn_tde_export_team_rosters_csv' ), 'tn_tde_export_team_rosters_csv' ) ); ?>">Export All Rosters (CSV)</a>
 		</p>
+		<?php if ( $groups ) : ?>
+			<table class="widefat striped" style="max-width:680px;margin-bottom:0.4rem;">
+				<thead><tr><th>Event</th><th>Total Teams</th><th>Total Players</th><th>Of Which Solo (Free Agent)</th></tr></thead>
+				<tbody>
+				<?php foreach ( $groups as $summary_event_title => $summary_signup_ids ) :
+					$summary_solo = 0;
+					$summary_players = 0;
+					foreach ( $summary_signup_ids as $summary_sid ) {
+						$summary_count = count( tn_tde_signup_assigned_player_ids( $summary_sid ) );
+						$summary_players += $summary_count;
+						if ( $summary_count === 1 ) $summary_solo++;
+					}
+					?>
+					<tr>
+						<td><?php echo esc_html( $summary_event_title ?: 'Untitled event' ); ?></td>
+						<td><?php echo esc_html( (string) count( $summary_signup_ids ) ); ?></td>
+						<td><?php echo esc_html( (string) $summary_players ); ?></td>
+						<td><?php echo esc_html( (string) $summary_solo ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+			<p class="description" style="max-width:680px;margin:0 0 1.2rem;">&#8220;Total Teams&#8221; already includes the solo (Free Agent) teams counted in the last column &mdash; they&#8217;re not counted separately. &#8220;Total Players&#8221; counts only players actually assigned to a roster, not empty/unfilled teams.</p>
+		<?php endif; ?>
 		<?php if ( $notice === 'saved' ) : ?>
 			<div class="notice notice-success is-dismissible"><p>Roster saved.<?php echo $conflicts ? ' Skipped (already claimed): ' . esc_html( $conflicts ) : ''; ?></p></div>
 		<?php elseif ( $notice === 'error' ) : ?>

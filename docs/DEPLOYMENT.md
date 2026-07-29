@@ -54,6 +54,29 @@ scores account and main site share underlying hosting ownership but have
 different FTP roots; do not assume their public DNS IPs identify separate
 infrastructure.
 
+## Event Signups Apps Script
+
+- Source: `google-apps-script/event-signups/Code.gs`.
+- Runs as a Web App deployed under the `info@trivianationals.org` Google
+  Workspace account (not a personal Gmail account) — this is what lets
+  `GmailApp.sendEmail()` send natively as `info@` with no send-as alias.
+- `SYNC_SECRET` lives in that project's Script Properties (Apps Script
+  editor → gear icon → Script Properties), not in source.
+- To redeploy after a code change: paste the updated `Code.gs` into the
+  project (logged in as `info@trivianationals.org`), save, then **Deploy →
+  Manage deployments** → edit the existing Web App deployment → **Version:
+  New Version** → Deploy. This keeps the same Web App URL, so WordPress's
+  **Event Schedule Manager → Signup Settings** endpoint setting does not
+  need to change.
+- Do not try to deploy this project from a different Google account via
+  Drive sharing — Apps Script refuses "New deployment" for a non-owner even
+  with Editor access. If the script ever needs to move to a different
+  account again, create a fresh project owned directly by that account and
+  copy the code in, rather than sharing the existing one.
+- WordPress's endpoint URL and shared secret are set via **Event Schedule
+  Manager → Signup Settings** (`tn_tde_signup_sheets_endpoint` /
+  `tn_tde_signup_sheets_secret` options).
+
 ## Rollback
 
 - WordPress: retain the last known-good plugin ZIP/source and confirm the

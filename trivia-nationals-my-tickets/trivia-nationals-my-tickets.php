@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.5.9
+ * Version: 0.6.0
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -32,6 +32,7 @@ final class TN_My_Tickets {
         add_action('admin_post_tn_ticket_email_copy', [self::class, 'handle_email_copy']);
         add_action('admin_post_tn_ticket_check_in', [self::class, 'handle_check_in']);
         add_action('admin_post_tn_allocated_ticket_save', [self::class, 'handle_allocated_ticket_save']);
+        add_action('admin_post_tn_allocated_ticket_delete', [self::class, 'handle_allocated_ticket_delete']);
         add_action('admin_post_tn_save_ticket_names', [self::class, 'handle_save_ticket_names']);
         add_action('template_redirect', [self::class, 'require_staff_for_scanner'], 1);
         add_action('template_redirect', [self::class, 'serve_manifest'], 0);
@@ -1128,6 +1129,18 @@ JS
         exit;
     }
 
+    public static function handle_allocated_ticket_delete(): void {
+        if (!current_user_can('manage_woocommerce')) wp_die('You do not have permission to manage allocated tickets.');
+        $post_id = isset($_GET['ticket_id']) ? absint($_GET['ticket_id']) : 0;
+        check_admin_referer('tn_allocated_ticket_delete_' . $post_id);
+        $post = get_post($post_id);
+        if ($post instanceof WP_Post && $post->post_type === self::ALLOCATED_POST_TYPE) {
+            wp_trash_post($post_id);
+        }
+        wp_safe_redirect(add_query_arg('tn_alloc_notice', 'deleted', self::allocated_admin_url()));
+        exit;
+    }
+
     public static function render_allocated_tickets_page(): void {
         if (!current_user_can('manage_woocommerce')) return;
         $ticket_id = isset($_GET['ticket_id']) ? absint($_GET['ticket_id']) : 0;
@@ -1141,6 +1154,7 @@ JS
             <a class="page-title-action" href="<?php echo esc_url(add_query_arg('add', '1', self::allocated_admin_url())); ?>">Add Ticket</a>
             <hr class="wp-header-end">
             <?php if ($notice === 'saved') : ?><div class="notice notice-success is-dismissible"><p>Allocated ticket saved.</p></div><?php endif; ?>
+            <?php if ($notice === 'deleted') : ?><div class="notice notice-success is-dismissible"><p>Allocated ticket deleted.</p></div><?php endif; ?>
             <?php if ($notice === 'invalid') : ?><div class="notice notice-error"><p>Enter a preferred name and valid email address.</p></div><?php endif; ?>
             <?php if (isset($_GET['add']) || $editing) : ?>
                 <div class="card" style="max-width:760px;margin-top:20px">
@@ -1167,7 +1181,7 @@ JS
                 <?php foreach ($tickets as $ticket) : ?>
                     <tr>
                         <td><strong><a href="<?php echo esc_url(add_query_arg('ticket_id', $ticket['id'], self::allocated_admin_url())); ?>"><?php echo esc_html($ticket['code']); ?></a></strong></td>
-                        <td><?php echo esc_html($ticket['preferred_name']); ?><div class="row-actions"><span class="edit"><a href="<?php echo esc_url(add_query_arg('ticket_id', $ticket['id'], self::allocated_admin_url())); ?>">Edit</a></span></div></td>
+                        <td><?php echo esc_html($ticket['preferred_name']); ?><div class="row-actions"><span class="edit"><a href="<?php echo esc_url(add_query_arg('ticket_id', $ticket['id'], self::allocated_admin_url())); ?>">Edit</a> | </span><span class="trash"><a href="<?php echo esc_url(wp_nonce_url(add_query_arg(['action' => 'tn_allocated_ticket_delete', 'ticket_id' => $ticket['id']], admin_url('admin-post.php')), 'tn_allocated_ticket_delete_' . $ticket['id'])); ?>" onclick="return confirm('Delete this allocated ticket? This cannot be undone from this screen.');" style="color:#a00;">Delete</a></span></div></td>
                         <td><?php echo esc_html($ticket['email']); ?></td>
                         <td><?php echo wp_kses_post(wc_price((float) $ticket['amount_paid'])); ?></td>
                         <td><?php echo esc_html($ticket['note']); ?></td>

@@ -27,6 +27,19 @@
   their one-hour transient remains available.
 - The tool has no unsubscribe/marketing-consent suppression list.
 
+## Site email
+
+- `info@trivianationals.org` is a Google Workspace mailbox; manage it and
+  its aliases (`info2@`, `leeann@`, `marketing@`) and forwarding filters via
+  Google Admin Console (Directory → Users) and that mailbox's own Gmail
+  settings, not WordPress.
+- WordPress's outbound signup/summary email goes through the Event Signups
+  Apps Script (see docs/DEPLOYMENT.md); its endpoint/secret are set on
+  **Event Schedule Manager → Signup Settings**.
+- `wp_mail()` itself (fallback path, and other WordPress-originated mail)
+  still uses HostGator's local `mail()`, which is unreliable — do not trust
+  a `wp_mail()` return value of `true` as proof of delivery.
+
 ## Checkpointing
 
 Use `scripts/project-checkpoint.sh --write`, review and update the shared docs,
