@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -16,8 +16,15 @@ final class TN_Announcements {
     private const LOG_OPTION = 'tn_announcements_log';
     private const LOG_LIMIT = 20;
     private const BATCH_TRANSIENT_PREFIX = 'tn_announcements_batch_';
-    private const BATCH_SIZE = 10;
     private const BATCH_TTL = HOUR_IN_SECONDS;
+    // Kept deliberately small/slow: a brand-new sending domain with no track
+    // record can trip Google's own outbound rate-limiting/reputation checks
+    // if a large batch goes out in a tight burst — confirmed live on
+    // 2026-07-29, where roughly half of a 182-recipient send (spread across
+    // dozens of unrelated domains, not one flaky server) came back
+    // "Transient Error" after being sent 10-at-a-time with only a 350ms gap.
+    private const BATCH_SIZE = 2;
+    private const BATCH_INTER_SEND_USLEEP = 500000; // 0.5s between individual sends within a batch
     private const NONCE_ACTION = 'tn_announcements_digest';
     private const REORDER_NONCE_ACTION = 'tn_announcements_reorder';
     private const CAPABILITY = 'manage_woocommerce';
@@ -498,7 +505,7 @@ final class TN_Announcements {
 
         $offset = max(0, absint($batch['next_offset'] ?? 0));
         $slice = array_slice($batch['recipients'], $offset, self::BATCH_SIZE);
-        foreach ($slice as $recipient) {
+        foreach ($slice as $index => $recipient) {
             $ok = self::send_to($recipient['email'], $batch['subject'], $batch['body']);
             if ($ok) {
                 $batch['sent']++;
@@ -508,6 +515,9 @@ final class TN_Announcements {
             $batch['next_offset']++;
             // Persist after every recipient so a retried request continues instead of resending.
             set_transient($key, $batch, self::BATCH_TTL);
+            if ($index < count($slice) - 1) {
+                usleep(self::BATCH_INTER_SEND_USLEEP);
+            }
         }
 
         $next_offset = (int) $batch['next_offset'];
@@ -819,7 +829,8 @@ final class TN_Announcements {
                             document.getElementById('tn_an_send_btn').disabled = false;
                             window.location.reload();
                         } else {
-                            window.setTimeout(step, 350);
+                            // Deliberately slow: see BATCH_SIZE's comment in the PHP class for why.
+                            window.setTimeout(step, 6000);
                         }
                     }).catch(function () {
                         setStatus('The browser lost contact with the server. Use “Resume interrupted send” to continue safely.', true);
@@ -879,7 +890,8 @@ final class TN_Announcements {
                     if (!res.success) { setStatus(res.data && res.data.message ? res.data.message : 'Could not check recipients.', true); return; }
                     var total = res.data.total;
                     if (total < 1) { setStatus('No matching attendees were found.', true); return; }
-                    if (!window.confirm('Send this digest to ' + total + ' attendee(s)? This cannot be undone.')) return;
+                    var estMinutes = Math.max(1, Math.round((total / 2) * 6.5 / 60));
+                    if (!window.confirm('Send this digest to ' + total + ' attendee(s)? This cannot be undone.\n\nSent gradually (2 at a time, a few seconds apart) to avoid tripping spam/rate-limit protections — expect roughly ' + estMinutes + ' minute(s). Keep this tab open until it finishes.')) return;
 
                     var progress = document.getElementById('tn_an_progress');
                     var bar = document.getElementById('tn_an_progress_bar');
