@@ -5,11 +5,16 @@ owner's computers.
 
 Before substantive work:
 
-1. Read `PROJECT.md`.
-2. Read `docs/CURRENT-STATE.md`, `docs/DEPLOYMENT.md`, and `docs/HANDOFF.md`.
-3. Run `git status --short` and preserve unrelated user changes.
-4. Pull or fetch before editing when network access and the current workflow
-   permit it. Never overwrite a dirty working tree merely to synchronize.
+1. Run `git status --short`, preserve unrelated user changes, and fetch GitHub
+   before relying on local source. Compare the active branch with its upstream
+   and `origin/main`; pull when it is safe. If GitHub cannot be reached, stop
+   before editing and tell the owner that the required freshness check could
+   not be completed. Never overwrite a dirty working tree merely to
+   synchronize.
+2. Read `PROJECT.md`.
+3. Read `docs/CURRENT-STATE.md`, `docs/DEPLOYMENT.md`, and `docs/HANDOFF.md`.
+4. Create and share a task plan before making code, content, configuration, or
+   production changes. Keep the plan current as work proceeds.
 
 After a meaningful release, production change, architectural decision, or
 investigation:
@@ -19,7 +24,10 @@ investigation:
    only in a conversational handoff.
 3. Update `docs/HANDOFF.md` with recent results, verification, and next steps.
 4. Run `scripts/project-checkpoint.sh --check`.
-5. Do not commit credentials, tokens, attendee/order exports, customer data,
+5. Commit and push the code plus its durable documentation record when
+   authorized, so future work can recover the result from Git rather than chat
+   history alone.
+6. Do not commit credentials, tokens, attendee/order exports, customer data,
    generated QR codes, photos, backups, deployment state, or local settings.
 
 When asked for a complete project checkpoint, follow

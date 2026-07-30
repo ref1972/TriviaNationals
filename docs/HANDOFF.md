@@ -1,9 +1,18 @@
 # Current handoff
 
-Last updated: 2026-07-29.
+Last updated: 2026-07-30.
 
 ## Recently completed
 
+- 2026-07-30: reconciled the `agent/quiz-bowl-waitlist` branch into `main`.
+  The branch's Quiz Bowl waitlist code was already reproduced on `main` by
+  `24e698a`, so the only content `main` was still missing was the hardened
+  `AGENTS.md` workflow (GitHub-first freshness check, share a plan before
+  changes, commit the durable documentation record after meaningful work) —
+  brought forward here. The branch's own doc edits were superseded by
+  `main`'s newer `docs/CURRENT-STATE.md`/`docs/HANDOFF.md` and were
+  deliberately not merged. `agent/quiz-bowl-waitlist` now holds nothing
+  `main` lacks and can be deleted.
 - 2026-07-29: fixed real sluggishness on the admin **Team Rosters** screen
   (Event Schedule Manager) and disabled captain self-service roster
   editing, both at the owner's explicit request.
@@ -428,12 +437,9 @@ Last updated: 2026-07-29.
 - Delete the two unused Apps Script Web App deployments left over from the
   Workspace migration's troubleshooting (owned by the old personal-account
   project) — harmless but tidy up when convenient.
-- Merge (or otherwise reconcile) the `agent/quiz-bowl-waitlist` remote
-  branch into `main` — its generalized waitlist feature is already live
-  in production (see the 2026-07-29 entry above) but `main` doesn't have
-  it, so `git diff` against production will keep showing this gap until
-  it's merged. Check `agent/sync-live-production` too before assuming
-  `main` matches everything live.
+- Inspect the `agent/sync-live-production` remote branch before assuming
+  `main` matches everything live. (`agent/quiz-bowl-waitlist` is now fully
+  reconciled — see the 2026-07-30 entry above.)
 - Confirm live in the browser that the Team Rosters admin screen is
   actually faster now and that the captain "Choose Team Members" flow is
   fully gone (link hidden, direct URL falls through safely) — both
