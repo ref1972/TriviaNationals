@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.8
+ * Version: 3.9
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -3314,7 +3314,7 @@ function tn_tde_signup_is_waitlist_event( $event ) {
 function tn_tde_signup_flight_is_hidden( $event, $flight_key ) {
 	$title = $event['base_title'] ?? $event['title'] ?? '';
 	if ( ! tn_tde_signup_title_matches( $title, [ '5x5', '5 x 5' ] ) ) return false;
-	return in_array( $flight_key, [ 'flight-a', 'flight-b', 'flight-c' ], true );
+	return ! in_array( $flight_key, [ 'flight-d', 'flight-e' ], true );
 }
 
 function tn_tde_signup_ttg_flight_labels() {

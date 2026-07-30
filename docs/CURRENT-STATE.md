@@ -15,7 +15,7 @@ Last human review: 2026-07-29.
   Preferred Name per seat on multi-quantity ticket orders. A reusable
   **"Ticket Names"** admin screen (WooCommerce menu) edits any order's
   per-seat Preferred Name directly.
-- Event Schedule Manager v3.8 adds a team roster picker for team-based event
+- Event Schedule Manager v3.9 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
   event and sorted alphabetically within each event by displayed name, with
   a player count and an editable Team Name field, driving one
@@ -106,12 +106,10 @@ Last human review: 2026-07-29.
   live again on 2026-07-29 (from the unmerged `agent/quiz-bowl-waitlist`
   branch) and preserved during that day's deploy, but **is still not in
   `main`** — see docs/HANDOFF.md's next steps.
-- **5 x 5 signup availability**: Flights A, B, and C are hidden from all
-  newly generated selectable signup options; D, E, any future F, and
-  non-flight options remain available. Existing stored signups are not
-  modified. At deployment time the live schedule contained D, E, and a
-  `Semi-Finals` option but no Flight F; that schedule discrepancy was left
-  unchanged. Deployed and live-verified 2026-07-30.
+- **5 x 5 signup availability**: newly generated selectable signup options
+  use an exact allowlist of Flights D and E. Flights A-C, Semi-Finals, Finals,
+  and any other 5 x 5 session labels are excluded. Existing stored signups are
+  not modified. Deployed and live-verified 2026-07-30.
 - The only valid purchased admission product is exactly **Trivia Nationals 2026
   Ticket**, production WooCommerce product ID `18347`.
 - Allocated tickets use the `TN26A-####` number format and participate in ticket
