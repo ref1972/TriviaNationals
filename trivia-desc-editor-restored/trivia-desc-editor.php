@@ -3290,6 +3290,12 @@ function tn_tde_signup_is_ttg_event( $event ) {
 	return tn_tde_signup_title_matches( $title, [ 'Trivia The Gathering', 'Trivia the Gathering', 'TTG' ] );
 }
 
+function tn_tde_signup_is_waitlist_event( $event ) {
+	$title = $event['base_title'] ?? $event['title'] ?? '';
+	$normalized_title = tn_tde_signup_normalize_title( $title );
+	return tn_tde_signup_is_ttg_event( $event ) || $normalized_title === 'quiz bowl';
+}
+
 function tn_tde_signup_ttg_flight_labels() {
 	return [ 'Flight A', 'Flight B', 'Flight C' ];
 }
@@ -3327,7 +3333,7 @@ function tn_tde_signup_flight_dedupe_key( $flight_label ) {
 function tn_tde_signup_flight_options_for_event( $event ) {
 	$base_title = sanitize_text_field( $event['base_title'] ?? $event['title'] ?? '' );
 	if ( $base_title === '' ) return [];
-	if ( tn_tde_signup_is_ttg_event( $event ) ) {
+	if ( tn_tde_signup_is_waitlist_event( $event ) ) {
 		$waitlist_label = 'Waiting List - Any Flight';
 		return [ [
 			'value' => $waitlist_label,
@@ -3402,10 +3408,10 @@ function tn_tde_signup_events_for_page() {
 		$key = tn_tde_signup_normalize_title( $title );
 		if ( isset( $choices[ $key ] ) ) continue;
 		$choices[ $key ] = [
-			'title' => $title . ( tn_tde_signup_is_ttg_event( $event ) ? ' - Waiting List' : '' ),
+			'title' => $title . ( tn_tde_signup_is_waitlist_event( $event ) ? ' - Waiting List' : '' ),
 			'slug' => tn_tde_event_detail_slug( $event ),
 			'isTeam' => tn_tde_event_is_team_signup( $event ),
-			'isWaitlist' => tn_tde_signup_is_ttg_event( $event ),
+			'isWaitlist' => tn_tde_signup_is_waitlist_event( $event ),
 			'flights' => array_map( static function( $option ) {
 				return [
 					'value' => $option['value'],
@@ -3424,7 +3430,8 @@ function tn_tde_render_event_signup_form( $event ) {
 	$flights = tn_tde_signup_flight_options_for_event( $event );
 	$current_flight = sanitize_text_field( $event['session_label'] ?? '' );
 	$is_team_signup = tn_tde_event_is_team_signup( $event );
-	$is_waitlist = tn_tde_signup_is_ttg_event( $event );
+	$is_waitlist = tn_tde_signup_is_waitlist_event( $event );
+	$event_title = sanitize_text_field( $event['base_title'] ?? $event['title'] ?? 'This event' );
 	ob_start();
 	?>
 	<section class="tn-dynamic-event-signup" aria-label="<?php echo esc_attr( $event['base_title'] ?? $event['title'] ?? 'Event' ); ?> signup">
@@ -3432,7 +3439,7 @@ function tn_tde_render_event_signup_form( $event ) {
 		<div class="tn-signup-note" role="note">
 			<p><strong>Important:</strong> You must be registered for Trivia Nationals 2026 before signing up for events.</p>
 			<?php if ( $is_waitlist ) : ?>
-				<p><strong>All Trivia: The Gathering flights are currently full.</strong> Submit this form to join the waiting list. This does not guarantee a spot; we will contact you if space becomes available.</p>
+				<p><strong>All <?php echo esc_html( $event_title ); ?> flights are currently full.</strong> Submit this form to join the waiting list. This does not guarantee a spot; we will contact you if space becomes available.</p>
 			<?php else : ?>
 				<p>You may sign up for only one flight per event.</p>
 				<p>Flight selection is for denoting your preference. Because of limited capacity, flight assignments cannot be guaranteed, but every effort will be made to get you into the flight you choose.</p>
