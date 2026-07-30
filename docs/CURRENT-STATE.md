@@ -15,7 +15,7 @@ Last human review: 2026-07-29.
   Preferred Name per seat on multi-quantity ticket orders. A reusable
   **"Ticket Names"** admin screen (WooCommerce menu) edits any order's
   per-seat Preferred Name directly.
-- Event Schedule Manager v3.5 adds a team roster picker for team-based event
+- Event Schedule Manager v3.6 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
   event with a player count and an editable Team Name field, driving one
   shared picker panel, plus a per-event summary table of Total Teams/Total
@@ -40,7 +40,7 @@ Last human review: 2026-07-29.
   page's cache-builder all benefit since they share this function. The
   captain-facing "Choose Team Members" flow is switched off via a single
   `tn_tde_captain_roster_editing_enabled()` flag (Event Schedule Manager,
-  now v3.5) currently returning `false`; the admin Team Rosters screen is
+  now v3.6) currently returning `false`; the admin Team Rosters screen is
   unaffected and remains the only way to assign team members while this
   is off. Both deployed and hash-verified; **not yet functionally
   verified live** (requires an authenticated admin session or a real

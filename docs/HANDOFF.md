@@ -66,6 +66,34 @@ Last updated: 2026-07-29.
     the remote too. Neither remote branch has been inspected or merged;
     flagging their existence here so the next person (Claude or Codex)
     knows to check before assuming `main` matches everything live.
+  - **Follow-up same day**: the owner reported Team Rosters was still
+    slow after the above. Investigation found a much bigger cost the
+    first pass missed: `tn_tde_get_home_schedule_events()` parses the
+    entire homepage's Elementor `_elementor_data` JSON into a full
+    `DOMDocument` and runs an XPath query to reconstruct every scheduled
+    event — real DOM-parsing work, and it had **no caching at all**, not
+    even for the duration of one request. `tn_tde_team_signup_admin_rows()`
+    (which the Team Rosters page calls to build its team dropdown) calls
+    `tn_tde_get_event_by_detail_slug()` — which calls that function — once
+    per team signup, so with ~75-100 teams the entire homepage schedule
+    was being parsed from scratch 75-100 times on a single page load, far
+    more expensive than the WooCommerce roster rebuild fixed in the first
+    pass. Fixed with simple per-request memoization (a `static` variable
+    in the function; the underlying Elementor data can't change
+    mid-request, so this is always correct, not just a TTL tradeoff) —
+    benefits all 6 call sites, not just this one. Two smaller fixes
+    alongside it, both in `tn_tde_team_signup_admin_rows()`/
+    `tn_tde_team_rosters_page()`: `get_posts(['fields' => 'ids', ...])`
+    returns before WordPress's usual postmeta cache priming (a documented
+    core quirk), so every subsequent `get_post_meta()` call across ~75-100
+    signups was its own individual query — fixed with one
+    `update_meta_cache('post', $ids)` call up front; and each team's
+    assigned-player count was being computed twice (once for the summary
+    table, again for the dropdown label) — now computed once and reused.
+    Event Schedule Manager now v3.6, `php -l` clean, no new drift found
+    against the v3.5 deploy, hash-verified live. **Not yet confirmed by
+    the owner** whether the page is now actually fast — the DOM/XPath fix
+    is the one expected to matter most.
 
 - Built, deployed, and live-tested the My Tickets v0.5.3 system: passwordless
   ticket retrieval, printable QR tickets, mobile staff scanner, check-in roster,

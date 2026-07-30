@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.5
+ * Version: 3.6
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -3066,7 +3066,22 @@ function tn_tde_event_detail_url( $event ) {
 	return home_url( '/event-info/' . tn_tde_event_detail_slug( $event ) . '/' );
 }
 
+/**
+ * Rebuilds the full homepage schedule by parsing the Elementor page's raw
+ * HTML into a DOM and running an XPath query over it -- expensive, and
+ * with 6 call sites some of which loop it once per signup (e.g. the Team
+ * Rosters admin screen resolving each team's event, ~1 call per team).
+ * Memoized per-request since the homepage's Elementor data can't change
+ * mid-request; this took the dominant real cost off the Team Rosters page
+ * (confirmed slower than the WooCommerce roster rebuild fixed separately).
+ */
 function tn_tde_get_home_schedule_events() {
+	static $cached = null;
+	if ( $cached !== null ) return $cached;
+	return $cached = tn_tde_build_home_schedule_events();
+}
+
+function tn_tde_build_home_schedule_events() {
 	$raw = get_post_meta( 5, '_elementor_data', true );
 	if ( ! $raw ) return [];
 	$data = json_decode( $raw, true );
@@ -8384,6 +8399,11 @@ function tn_tde_team_signup_admin_rows() {
 			],
 		],
 	] );
+	// 'fields' => 'ids' makes WP_Query return before its usual postmeta
+	// cache priming, so every tn_tde_signup_meta_value() below would
+	// otherwise be its own individual query per post; prime it in one
+	// batch query up front instead.
+	update_meta_cache( 'post', $ids );
 	// Filter in PHP (not by whether Team Name text was filled in) so a
 	// captain who left the name blank still shows up here, matching the
 	// same tn_tde_event_is_team_signup() check that shows their "Choose
@@ -8402,9 +8422,9 @@ function tn_tde_team_signup_admin_rows() {
  * "{team name or 'Unnamed team'} ({assigned count})" — used for the team
  * dropdown option text and the panel header on the Team Rosters admin page.
  */
-function tn_tde_team_roster_admin_label( $signup_id ) {
+function tn_tde_team_roster_admin_label( $signup_id, $count = null ) {
 	$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
-	$count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
+	if ( $count === null ) $count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
 	return sprintf( '%s (%d)', $team_name !== '' ? $team_name : 'Unnamed team', $count );
 }
 
@@ -8438,11 +8458,16 @@ function tn_tde_team_rosters_page() {
 			<table class="widefat striped" style="max-width:680px;margin-bottom:0.4rem;">
 				<thead><tr><th>Event</th><th>Total Teams</th><th>Total Players</th><th>Of Which Solo (Free Agent)</th></tr></thead>
 				<tbody>
-				<?php foreach ( $groups as $summary_event_title => $summary_signup_ids ) :
+				<?php
+				// Computed once here and reused for the dropdown labels below
+				// instead of recounting each team's assigned players twice.
+				$assigned_counts_by_id = [];
+				foreach ( $groups as $summary_event_title => $summary_signup_ids ) :
 					$summary_solo = 0;
 					$summary_players = 0;
 					foreach ( $summary_signup_ids as $summary_sid ) {
 						$summary_count = count( tn_tde_signup_assigned_player_ids( $summary_sid ) );
+						$assigned_counts_by_id[ $summary_sid ] = $summary_count;
 						$summary_players += $summary_count;
 						if ( $summary_count === 1 ) $summary_solo++;
 					}
@@ -8475,7 +8500,7 @@ function tn_tde_team_rosters_page() {
 							<?php foreach ( $groups as $event_title => $signup_ids ) : ?>
 								<optgroup label="<?php echo esc_attr( $event_title ?: 'Untitled event' ); ?>">
 									<?php foreach ( $signup_ids as $signup_id ) : ?>
-										<option value="<?php echo esc_attr( $signup_id ); ?>" <?php selected( $signup_id, $selected_id ); ?>><?php echo esc_html( tn_tde_team_roster_admin_label( $signup_id ) ); ?></option>
+										<option value="<?php echo esc_attr( $signup_id ); ?>" <?php selected( $signup_id, $selected_id ); ?>><?php echo esc_html( tn_tde_team_roster_admin_label( $signup_id, $assigned_counts_by_id[ $signup_id ] ?? null ) ); ?></option>
 									<?php endforeach; ?>
 								</optgroup>
 							<?php endforeach; ?>
