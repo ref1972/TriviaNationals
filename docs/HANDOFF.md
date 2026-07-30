@@ -4,6 +4,16 @@ Last updated: 2026-07-30.
 
 ## Recently completed
 
+- 2026-07-30: **5 x 5 signup options restricted** (Event Schedule Manager
+  v3.8). Added a narrowly scoped option-generation filter that suppresses
+  only Flights A, B, and C for normalized `5x5` / `5 x 5` event titles.
+  Flights D, E, any future F, and non-flight session labels remain selectable;
+  no stored signup records were changed. Pre-deploy production drift check was
+  clean, PHP syntax and diff checks passed, and the guarded FTPS deploy was
+  backup- and hash-verified. Live `/event-signups/` configuration confirms A-C
+  are absent and D/E remain. The live schedule currently has `Semi-Finals` as
+  its sixth 5 x 5 option rather than Flight F; this task deliberately did not
+  invent or relabel a schedule entry.
 - 2026-07-30: **Team Rosters naming and ordering** (Event Schedule Manager,
   now **v3.7**), deployed and hash-verified.
   - The admin team dropdown is now sorted alphabetically within each event

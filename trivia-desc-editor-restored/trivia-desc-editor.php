@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.7
+ * Version: 3.8
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -3311,6 +3311,12 @@ function tn_tde_signup_is_waitlist_event( $event ) {
 	return tn_tde_signup_is_ttg_event( $event ) || $normalized_title === 'quiz bowl';
 }
 
+function tn_tde_signup_flight_is_hidden( $event, $flight_key ) {
+	$title = $event['base_title'] ?? $event['title'] ?? '';
+	if ( ! tn_tde_signup_title_matches( $title, [ '5x5', '5 x 5' ] ) ) return false;
+	return in_array( $flight_key, [ 'flight-a', 'flight-b', 'flight-c' ], true );
+}
+
 function tn_tde_signup_ttg_flight_labels() {
 	return [ 'Flight A', 'Flight B', 'Flight C' ];
 }
@@ -3374,9 +3380,10 @@ function tn_tde_signup_flight_options_for_event( $event ) {
 		if ( ! $flight_labels ) continue;
 		$time_label = tn_tde_signup_option_time_label( $candidate );
 		foreach ( $flight_labels as $flight_label ) {
+			$flight_key = tn_tde_signup_flight_dedupe_key( $flight_label );
+			if ( tn_tde_signup_flight_is_hidden( $candidate, $flight_key ) ) continue;
 			$flight_time_label = tn_tde_signup_custom_flight_time_label( $candidate, $flight_label ) ?: $time_label;
 			$option_label = $flight_time_label ? $flight_label . ' - ' . $flight_time_label : $flight_label;
-			$flight_key = tn_tde_signup_flight_dedupe_key( $flight_label );
 			if ( isset( $options[ $flight_key ] ) ) continue; // Only show the first (earliest) occurrence of each flight letter.
 			$options[ $flight_key ] = [
 				'value' => $option_label,
