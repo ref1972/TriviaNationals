@@ -4,6 +4,43 @@ Last updated: 2026-07-30.
 
 ## Recently completed
 
+- 2026-07-30: **Team Rosters naming and ordering** (Event Schedule Manager,
+  now **v3.7**), deployed and hash-verified.
+  - The admin team dropdown is now sorted alphabetically within each event
+    group (`strnatcasecmp` on the displayed name, so it reads the way it
+    sorts and free agents cluster under "FA:"). Event grouping is unchanged.
+  - New `tn_tde_team_display_name()` derives every displayed team name:
+    blank name → "Team {captain}"; exactly one assigned player → "FA: "
+    prefix; the two compose as "FA: Team {captain}". Applied in the admin
+    dropdown and panel header, the CSV export, the public `/team-rosters/`
+    page, and the "already claimed by" label in the picker.
+  - Derived rather than written to the database, at the owner's explicit
+    choice, because the "FA: " rule keys off a player count that changes
+    with every roster edit — the 2026-07-28 one-time rewrite had already
+    gone stale (e.g. "Straphangers" was solo but unprefixed). Any stored
+    "FA: " is stripped before the rules re-apply, so nothing double-prefixes
+    and the prefix now self-corrects. Stored names are untouched and remain
+    what the Team Name field edits; the captain's confirmation email still
+    quotes the captain's own stored text, not the derived name.
+  - The public page transient was bumped `..._v1` → `..._v2` so the cache
+    could not serve pre-deploy names.
+  - **Live-verified on the public page**: 87 teams before and after, the 9
+    "Unnamed team" entries are gone, 36 teams carry "FA: ", and an automated
+    check found zero rule violations (prefix present iff exactly one player)
+    and zero double prefixes. **Not verified**: the admin dropdown's
+    alphabetical order and panel header, which need an authenticated
+    wp-admin session — the sort itself was unit-checked separately against
+    real names. Owner should eyeball the dropdown.
+  - Two deploy-tooling bugs fixed in `scripts/wp-plugin-ftps.sh` along the
+    way, both of which blocked this deploy: the Keychain lookup only tried
+    `find-internet-password`, but the password on this machine is a
+    *generic* item under service "Trivia Nationals FTPS" (failed with a bare
+    `530`); and `deploy`'s error told you to "run 'pull' or 'diff' first"
+    while only `pull` recorded the reviewed baseline — and `pull` rightly
+    refuses to overwrite an edited working copy, so "edit, diff, deploy" was
+    permanently blocked. `diff` now records the baseline too.
+  - Pre-deploy drift check found **no** production drift this time: the live
+    file matched `main` byte for byte before upload.
 - 2026-07-30: reconciled the `agent/quiz-bowl-waitlist` branch into `main`.
   The branch's Quiz Bowl waitlist code was already reproduced on `main` by
   `24e698a`, so the only content `main` was still missing was the hardened
@@ -440,6 +477,10 @@ Last updated: 2026-07-30.
 - Inspect the `agent/sync-live-production` remote branch before assuming
   `main` matches everything live. (`agent/quiz-bowl-waitlist` is now fully
   reconciled — see the 2026-07-30 entry above.)
+- Confirm live in the browser that the Team Rosters admin dropdown is now
+  alphabetical within each event and that the panel header shows the derived
+  name (2026-07-30 entry above) — the public page was verified
+  automatically, the admin screen needs a logged-in look.
 - Confirm live in the browser that the Team Rosters admin screen is
   actually faster now and that the captain "Choose Team Members" flow is
   fully gone (link hidden, direct URL falls through safely) — both

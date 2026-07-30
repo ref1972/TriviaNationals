@@ -10,6 +10,7 @@ FTP_HOST="wartburg.websitewelcome.com"
 FTP_PORT=21
 FTP_USER="tndeploy@trivianationals.org"
 KEYCHAIN_SERVICE="ftp.trivianationals.org"
+KEYCHAIN_GENERIC_SERVICE="Trivia Nationals FTPS"
 REMOTE_PATH="plugins/trivia-desc-editor-restored/trivia-desc-editor.php"
 LOCAL_PATH="$REPO_ROOT/trivia-desc-editor-restored/trivia-desc-editor.php"
 STATE_FILE="$REPO_ROOT/.wp-deploy-state/trivia-desc-editor.sha256"
@@ -37,9 +38,16 @@ get_password() {
 		printf '%s' "$WP_FTP_PASSWORD"
 		return
 	fi
+	# Both Keychain item kinds are checked: this password is stored on at
+	# least one machine as a generic item under "Trivia Nationals FTPS"
+	# rather than as an internet password under the host, and looking for
+	# only one kind made deploys fail with a bare 530.
 	if command -v security >/dev/null 2>&1; then
 		local pw
 		pw="$(security find-internet-password -a "$FTP_USER" -s "$KEYCHAIN_SERVICE" -w 2>/dev/null || true)"
+		if [[ -z "$pw" ]]; then
+			pw="$(security find-generic-password -a "$FTP_USER" -s "$KEYCHAIN_GENERIC_SERVICE" -w 2>/dev/null || true)"
+		fi
 		if [[ -n "$pw" ]]; then
 			printf '%s' "$pw"
 			return
@@ -135,6 +143,14 @@ cmd_diff() {
 	remote_tmp="$(mktemp_tracked)"
 	echo "Fetching live file from $FTP_HOST for comparison ..."
 	fetch_live "$remote_tmp"
+
+	# Reviewing this diff is exactly the review 'deploy' requires, so record
+	# the baseline here too — 'deploy' already told you to "run 'pull' or
+	# 'diff' first", but only 'pull' used to record it, and 'pull' rightly
+	# refuses to overwrite an edited working copy. That left "edit, then
+	# diff, then deploy" permanently blocked.
+	mkdir -p "$(dirname "$STATE_FILE")"
+	sha256_of "$remote_tmp" >"$STATE_FILE"
 
 	if diff -q "$LOCAL_PATH" "$remote_tmp" >/dev/null 2>&1; then
 		echo "No differences between local working copy and live."

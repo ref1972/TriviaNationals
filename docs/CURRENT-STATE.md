@@ -15,9 +15,10 @@ Last human review: 2026-07-29.
   Preferred Name per seat on multi-quantity ticket orders. A reusable
   **"Ticket Names"** admin screen (WooCommerce menu) edits any order's
   per-seat Preferred Name directly.
-- Event Schedule Manager v3.6 adds a team roster picker for team-based event
+- Event Schedule Manager v3.7 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
-  event with a player count and an editable Team Name field, driving one
+  event and sorted alphabetically within each event by displayed name, with
+  a player count and an editable Team Name field, driving one
   shared picker panel, plus a per-event summary table of Total Teams/Total
   Players/solo-team count), a "Export All Rosters (CSV)" download (including
   a Flight column, added 2026-07-29), a public
@@ -31,6 +32,16 @@ Last human review: 2026-07-29.
   hash-verified live. The admin screen, roster contents (including
   allocated tickets), CSV export, the public page, and its caching are all
   verified working live.
+- **Team names are derived at display time, never stored** (owner's
+  decision, 2026-07-30, implemented in `tn_tde_team_display_name()`): a team
+  with no name of its own shows as "Team {captain}", and a team with exactly
+  one assigned player is prefixed "FA: ". Any "FA: " already present in the
+  stored name is stripped before the rules re-apply, so the prefix tracks
+  the live player count instead of the 2026-07-28 one-time rewrite's
+  now-stale snapshot, and nothing double-prefixes. The rule is applied by
+  the admin dropdown and panel header, the CSV export, and the public
+  `/team-rosters/` page; the stored value is what the Team Name field edits
+  and what the captain's confirmation email quotes, and is left untouched.
 - **2026-07-29: fixed real Team Rosters admin sluggishness and disabled
   captain roster self-service**, both at the owner's explicit request.
   `TN_My_Tickets::attendee_roster()` (My Tickets, now v0.6.1) now caches

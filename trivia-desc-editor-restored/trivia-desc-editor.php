@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.6
+ * Version: 3.7
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -4494,6 +4494,36 @@ function tn_tde_set_signup_assigned_player_ids( $signup_id, array $ids ) {
 }
 
 /**
+ * The name a team is shown under, derived on every render rather than stored
+ * (owner's decision, 2026-07-30) so it stays correct as rosters change:
+ *
+ * - a team with no name of its own shows as "Team {captain}";
+ * - a team with exactly one assigned player is prefixed "FA: " (free agent).
+ *
+ * The 2026-07-28 one-time data rewrite baked a literal "FA: " into ~30 stored
+ * names, and those had already gone stale (a team that later gained a second
+ * player kept the prefix). Any stored "FA: " is therefore stripped before the
+ * rules are re-applied, so the prefix now tracks the live player count and no
+ * name is ever double-prefixed. The stored value itself is left alone — it is
+ * still what the Team Name field on the Team Rosters screen edits, and what
+ * the captain's own confirmation email quotes back to them.
+ *
+ * @param int      $signup_id
+ * @param int|null $assigned_count Player count the caller already has; null
+ *                                 recomputes it.
+ */
+function tn_tde_team_display_name( $signup_id, $assigned_count = null ) {
+	$name = trim( (string) tn_tde_signup_meta_value( $signup_id, 'team' ) );
+	$name = trim( (string) preg_replace( '/^\s*FA\s*:\s*/i', '', $name ) );
+	if ( $name === '' ) {
+		$captain = trim( (string) tn_tde_signup_meta_value( $signup_id, 'name' ) );
+		$name = $captain !== '' ? 'Team ' . $captain : 'Unnamed team';
+	}
+	if ( $assigned_count === null ) $assigned_count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
+	return (int) $assigned_count === 1 ? 'FA: ' . $name : $name;
+}
+
+/**
  * Full attendee roster for a team event, annotated with which team (if any
  * other than $exclude_signup_id) has already claimed each person.
  *
@@ -4504,9 +4534,9 @@ function tn_tde_team_roster_pool( $event_title, $exclude_signup_id = 0 ) {
 	$roster = tn_tickets_attendee_roster();
 	$taken = [];
 	foreach ( tn_tde_team_signup_ids_for_event_title( $event_title, $exclude_signup_id ) as $other_id ) {
-		$team_name = tn_tde_signup_meta_value( $other_id, 'team' );
-		$label = $team_name !== '' ? $team_name : tn_tde_signup_meta_value( $other_id, 'name' );
-		foreach ( tn_tde_signup_assigned_player_ids( $other_id ) as $player_id ) {
+		$assigned = tn_tde_signup_assigned_player_ids( $other_id );
+		$label = tn_tde_team_display_name( $other_id, count( $assigned ) );
+		foreach ( $assigned as $player_id ) {
 			if ( ! isset( $taken[ $player_id ] ) ) $taken[ $player_id ] = $label;
 		}
 	}
@@ -5887,7 +5917,7 @@ add_action( 'template_redirect', function() {
  * signup status changes (cancel/restore/spam), and new signups.
  */
 function tn_tde_invalidate_public_team_rosters_cache() {
-	delete_transient( 'tn_tde_public_team_rosters_v1' );
+	delete_transient( 'tn_tde_public_team_rosters_v2' );
 }
 
 /**
@@ -5906,7 +5936,7 @@ function tn_tde_invalidate_public_team_rosters_cache() {
  * team instead of rebuilding it once per team.
  */
 function tn_tde_public_team_rosters_data() {
-	$cached = get_transient( 'tn_tde_public_team_rosters_v1' );
+	$cached = get_transient( 'tn_tde_public_team_rosters_v2' );
 	if ( is_array( $cached ) ) return $cached;
 
 	$names_by_id = [];
@@ -5920,12 +5950,17 @@ function tn_tde_public_team_rosters_data() {
 	foreach ( tn_tde_team_signup_admin_rows() as $event_title => $signup_ids ) {
 		$teams = [];
 		foreach ( $signup_ids as $signup_id ) {
+			$assigned = tn_tde_signup_assigned_player_ids( $signup_id );
 			$names = [];
-			foreach ( tn_tde_signup_assigned_player_ids( $signup_id ) as $player_id ) {
+			foreach ( $assigned as $player_id ) {
 				if ( isset( $names_by_id[ $player_id ] ) ) $names[] = $names_by_id[ $player_id ];
 			}
 			$teams[] = [
-				'team_name' => tn_tde_signup_meta_value( $signup_id, 'team' ),
+				// Derived, not stored — and from the assigned-id count, not
+				// count($names), so the "FA: " rule keys off the same number
+				// the admin screen shows even if a player is missing from the
+				// attendee roster.
+				'team_name' => tn_tde_team_display_name( $signup_id, count( $assigned ) ),
 				'captain' => tn_tde_signup_meta_value( $signup_id, 'name' ),
 				'names' => $names,
 			];
@@ -5933,7 +5968,7 @@ function tn_tde_public_team_rosters_data() {
 		$data[ $event_title ] = $teams;
 	}
 
-	set_transient( 'tn_tde_public_team_rosters_v1', $data, HOUR_IN_SECONDS );
+	set_transient( 'tn_tde_public_team_rosters_v2', $data, HOUR_IN_SECONDS );
 	return $data;
 }
 
@@ -6118,7 +6153,7 @@ function tn_tde_render_public_team_rosters_page() {
 							$names = $team['names'];
 							?>
 							<div class="tn-roster-public-team">
-								<h3><?php echo esc_html( $team['team_name'] ?: 'Unnamed team' ); ?></h3>
+								<h3><?php echo esc_html( $team['team_name'] ); ?></h3>
 								<p class="tn-roster-public-meta">Captain: <?php echo esc_html( $team['captain'] ?: 'unknown' ); ?> &middot; <?php echo esc_html( (string) count( $names ) ); ?> player<?php echo count( $names ) === 1 ? '' : 's'; ?></p>
 								<p class="tn-roster-public-players"><?php echo $names ? esc_html( implode( ', ', $names ) ) : 'Roster forming'; ?></p>
 							</div>
@@ -8419,13 +8454,13 @@ function tn_tde_team_signup_admin_rows() {
 }
 
 /**
- * "{team name or 'Unnamed team'} ({assigned count})" — used for the team
- * dropdown option text and the panel header on the Team Rosters admin page.
+ * "{display name} ({assigned count})" — used for the team dropdown option
+ * text and the panel header on the Team Rosters admin page. See
+ * tn_tde_team_display_name() for how the name itself is derived.
  */
 function tn_tde_team_roster_admin_label( $signup_id, $count = null ) {
-	$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
 	if ( $count === null ) $count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
-	return sprintf( '%s (%d)', $team_name !== '' ? $team_name : 'Unnamed team', $count );
+	return sprintf( '%s (%d)', tn_tde_team_display_name( $signup_id, $count ), $count );
 }
 
 function tn_tde_team_rosters_page() {
@@ -8433,6 +8468,28 @@ function tn_tde_team_rosters_page() {
 	$notice = isset( $_GET['tn_roster_notice'] ) ? sanitize_key( wp_unslash( $_GET['tn_roster_notice'] ) ) : '';
 	$conflicts = isset( $_GET['tn_roster_conflicts'] ) ? sanitize_text_field( wp_unslash( $_GET['tn_roster_conflicts'] ) ) : '';
 	$groups = tn_tde_team_signup_admin_rows();
+
+	// Counted and named once up front: the summary table, the sort directly
+	// below, and the dropdown labels all need exactly these two arrays.
+	$assigned_counts_by_id = [];
+	$display_names_by_id = [];
+	foreach ( $groups as $signup_ids ) {
+		foreach ( $signup_ids as $signup_id ) {
+			$count = count( tn_tde_signup_assigned_player_ids( $signup_id ) );
+			$assigned_counts_by_id[ $signup_id ] = $count;
+			$display_names_by_id[ $signup_id ] = tn_tde_team_display_name( $signup_id, $count );
+		}
+	}
+	// Alphabetical within each event, by the name actually shown in the
+	// dropdown, so scanning the list works the way it reads (which also
+	// groups the free agents together under "FA:"). Natural, case-insensitive
+	// order keeps "Team 2" before "Team 10" and ignores capitalisation.
+	foreach ( $groups as $event_title => $signup_ids ) {
+		usort( $signup_ids, function ( $a, $b ) use ( $display_names_by_id ) {
+			return strnatcasecmp( $display_names_by_id[ $a ], $display_names_by_id[ $b ] );
+		} );
+		$groups[ $event_title ] = $signup_ids;
+	}
 
 	$requested_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
 	$selected_id = 0;
@@ -8459,15 +8516,11 @@ function tn_tde_team_rosters_page() {
 				<thead><tr><th>Event</th><th>Total Teams</th><th>Total Players</th><th>Of Which Solo (Free Agent)</th></tr></thead>
 				<tbody>
 				<?php
-				// Computed once here and reused for the dropdown labels below
-				// instead of recounting each team's assigned players twice.
-				$assigned_counts_by_id = [];
 				foreach ( $groups as $summary_event_title => $summary_signup_ids ) :
 					$summary_solo = 0;
 					$summary_players = 0;
 					foreach ( $summary_signup_ids as $summary_sid ) {
-						$summary_count = count( tn_tde_signup_assigned_player_ids( $summary_sid ) );
-						$assigned_counts_by_id[ $summary_sid ] = $summary_count;
+						$summary_count = $assigned_counts_by_id[ $summary_sid ];
 						$summary_players += $summary_count;
 						if ( $summary_count === 1 ) $summary_solo++;
 					}
@@ -8522,7 +8575,8 @@ function tn_tde_team_rosters_page() {
 							<?php wp_nonce_field( 'tn_tde_admin_save_team_roster_' . $selected_id, 'tn_tde_admin_roster_nonce' ); ?>
 							<p>
 								<label for="tn-team-roster-name"><strong>Team Name</strong></label><br>
-								<input type="text" id="tn-team-roster-name" name="team_name" value="<?php echo esc_attr( $team_name ); ?>" class="regular-text" placeholder="Unnamed team">
+								<input type="text" id="tn-team-roster-name" name="team_name" value="<?php echo esc_attr( $team_name ); ?>" class="regular-text" placeholder="<?php echo esc_attr( $captain !== '' ? 'Team ' . $captain : 'Unnamed team' ); ?>">
+								<span class="description" style="display:block;margin-top:4px;">Leave blank to show as &#8220;Team <?php echo esc_html( $captain ?: '{captain}' ); ?>&#8221;. A team with exactly one player is shown with an &#8220;FA: &#8221; prefix automatically &mdash; you don&#8217;t need to type it, and any &#8220;FA: &#8221; typed here is ignored when the displayed name is built.</span>
 							</p>
 							<?php tn_tde_render_team_roster_picker( $selected_id, $pool ); ?>
 							<p><button type="submit" class="button button-primary">Save Roster</button></p>
@@ -8573,18 +8627,18 @@ add_action( 'admin_post_tn_tde_export_team_rosters_csv', function() {
 	foreach ( tn_tde_team_signup_admin_rows() as $event_title => $signup_ids ) {
 		foreach ( $signup_ids as $signup_id ) {
 			$flight = tn_tde_signup_meta_value( $signup_id, 'flight' );
-			$team_name = tn_tde_signup_meta_value( $signup_id, 'team' );
 			$captain = tn_tde_signup_meta_value( $signup_id, 'name' );
 			$assigned_ids = tn_tde_signup_assigned_player_ids( $signup_id );
+			$team_name = tn_tde_team_display_name( $signup_id, count( $assigned_ids ) );
 			$names = [];
 			foreach ( tn_tde_team_roster_pool( $event_title, $signup_id ) as $person ) {
 				if ( in_array( $person['id'], $assigned_ids, true ) ) $names[] = $person['name'];
 			}
 			if ( ! $names ) {
-				fputcsv( $out, [ $event_title, $flight, $team_name ?: 'Unnamed team', $captain, '' ] );
+				fputcsv( $out, [ $event_title, $flight, $team_name, $captain, '' ] );
 			} else {
 				foreach ( $names as $name ) {
-					fputcsv( $out, [ $event_title, $flight, $team_name ?: 'Unnamed team', $captain, $name ] );
+					fputcsv( $out, [ $event_title, $flight, $team_name, $captain, $name ] );
 				}
 			}
 		}
