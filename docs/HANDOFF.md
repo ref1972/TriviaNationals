@@ -4,6 +4,69 @@ Last updated: 2026-07-29.
 
 ## Recently completed
 
+- 2026-07-29: fixed real sluggishness on the admin **Team Rosters** screen
+  (Event Schedule Manager) and disabled captain self-service roster
+  editing, both at the owner's explicit request.
+  - **Performance**: `TN_My_Tickets::attendee_roster()` (My Tickets, now
+    v0.6.1) rebuilt the entire ticket-holder roster from scratch on every
+    call — `wc_get_orders(['limit' => -1, ...])` hydrates a full
+    `WC_Order` object plus every line item for *every* order in the
+    store, which got noticeably slower as real order volume grew closer
+    to the event. Both the admin Team Rosters screen (via
+    `tn_tde_team_roster_pool()`) and the public `/team-rosters/` page's
+    cache-builder call this on every request, with no caching at the
+    `attendee_roster()` level itself — the admin screen was deliberately
+    left uncached in the original design (see docs/DECISIONS.md's
+    2026-07-28 entry) on the assumption traffic was low; that held until
+    the underlying roster rebuild itself grew slow enough to matter even
+    at low traffic. Fixed by caching `attendee_roster()`'s result in a
+    15-minute transient, invalidated immediately by `invalidate_roster_cache()`
+    on the three things that actually change its contents: a
+    `woocommerce_order_status_changed` hook (new paid orders,
+    cancellations, refunds), allocated-ticket save/delete, and
+    preferred-name edits (the "Ticket Names" admin tool). This benefits
+    the admin screen, the CSV export, and the public page's cache-builder
+    identically since they all go through the same function.
+  - **Captain roster editing disabled**: added a single
+    `tn_tde_captain_roster_editing_enabled()` switch (Event Schedule
+    Manager, now v3.5) currently returning `false`, gating all three
+    captain-facing touch points on `/manage-signups/`: the "Choose Team
+    Members" link is hidden, the `?tn_view=roster` view itself no longer
+    activates (falls through to the normal signups-card view instead of
+    erroring), and the POST save handler bails with the standard "could
+    not be saved" error as defense-in-depth against a stale bookmarked
+    link. The admin Team Rosters screen (staff-only) is untouched and
+    remains the sole way to assign team members while this is off.
+    Flipping the one function back to `true` fully restores the captain
+    flow.
+  - **Live drift discovered and reconciled during deploy**: before
+    uploading, a pre-deploy diff against production found
+    `trivia-desc-editor.php` already running code not in `main` —
+    `tn_tde_signup_is_ttg_event()` had been generalized into
+    `tn_tde_signup_is_waitlist_event()` (also matching a normalized
+    "quiz bowl" title) and the waitlist message now names the actual
+    event instead of a hardcoded "All Trivia: The Gathering". This
+    matches a remote branch spotted the same session,
+    `agent/quiz-bowl-waitlist`, which has not been merged to `main`.
+    Reconciled the same way as the 2026-07-28 waitlist-feature drift: took
+    the live file as the base, isolated this session's own patch (the
+    perf/disable changes above) via `git diff` against the pre-work
+    commit, and reapplied just that patch — it applied with zero fuzz,
+    confirming no overlap with the quiz-bowl change. Both plugins deployed
+    and hash-verified; `main` now needs `agent/quiz-bowl-waitlist` merged
+    in (or the equivalent change reproduced) to stop diverging from
+    production — not yet done, see below.
+  - **Not yet verified live**: rendering/functional verification of both
+    changes (confirming the admin screen is actually faster, and that the
+    captain flow is actually gone end to end) requires either an
+    authenticated wp-admin session or a real captain magic-link token,
+    neither of which an agent should generate/use unattended — the owner
+    should confirm both in the browser.
+  - Also spotted the same session: `agent/sync-live-production` moved on
+    the remote too. Neither remote branch has been inspected or merged;
+    flagging their existence here so the next person (Claude or Codex)
+    knows to check before assuming `main` matches everything live.
+
 - Built, deployed, and live-tested the My Tickets v0.5.3 system: passwordless
   ticket retrieval, printable QR tickets, mobile staff scanner, check-in roster,
   and editable allocated tickets.
@@ -337,11 +400,25 @@ Last updated: 2026-07-29.
 - Delete the two unused Apps Script Web App deployments left over from the
   Workspace migration's troubleshooting (owned by the old personal-account
   project) — harmless but tidy up when convenient.
-- Live-test the team roster picker's remaining untested path: the captain
-  "Choose Team Members" flow on `/manage-signups/` (including the
-  confirmation email), and cross-team exclusion with two real team
-  signups on the same event. The admin screen and the name-per-seat fix
-  are now confirmed live.
+- Merge (or otherwise reconcile) the `agent/quiz-bowl-waitlist` remote
+  branch into `main` — its generalized waitlist feature is already live
+  in production (see the 2026-07-29 entry above) but `main` doesn't have
+  it, so `git diff` against production will keep showing this gap until
+  it's merged. Check `agent/sync-live-production` too before assuming
+  `main` matches everything live.
+- Confirm live in the browser that the Team Rosters admin screen is
+  actually faster now and that the captain "Choose Team Members" flow is
+  fully gone (link hidden, direct URL falls through safely) — both
+  changes are deployed and hash-verified but not yet functionally
+  verified end to end (see the 2026-07-29 entry above for why).
+- Once ready to restore captain self-service roster editing, flip
+  `tn_tde_captain_roster_editing_enabled()` back to `true`.
+- The captain "Choose Team Members" flow (previously the remaining
+  untested path here) is now deliberately disabled rather than pending
+  test — see the 2026-07-29 entry above. If it's re-enabled later, still
+  live-test it end to end, including the confirmation email and
+  cross-team exclusion with two real team signups on the same event.
+  The admin screen and the name-per-seat fix are now confirmed live.
 - Watch for any recurrence of the `451`/TLS 1.3 FTP data-connection issue on
   future deploys, now that `wp-plugin-ftps.sh` forces TLS 1.2 — if it still
   recurs, the cause isn't (only) TLS version and needs more digging.

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals My Tickets
  * Description: Passwordless electronic tickets backed by paid WooCommerce orders.
- * Version: 0.6.0
+ * Version: 0.6.1
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -20,6 +20,8 @@ final class TN_My_Tickets {
     private const OPTION_ALLOCATED_SEQUENCE = 'tn_allocated_ticket_sequence';
     private const ALLOCATED_POST_TYPE = 'tn_alloc_ticket';
     private const TOKEN_TTL = 1800;
+    private const ROSTER_CACHE_KEY = 'tn_tickets_attendee_roster_v1';
+    private const ROSTER_CACHE_TTL = 15 * MINUTE_IN_SECONDS;
 
     public static function init(): void {
         add_shortcode('tn_my_tickets', [self::class, 'render_shortcode']);
@@ -34,6 +36,7 @@ final class TN_My_Tickets {
         add_action('admin_post_tn_allocated_ticket_save', [self::class, 'handle_allocated_ticket_save']);
         add_action('admin_post_tn_allocated_ticket_delete', [self::class, 'handle_allocated_ticket_delete']);
         add_action('admin_post_tn_save_ticket_names', [self::class, 'handle_save_ticket_names']);
+        add_action('woocommerce_order_status_changed', [self::class, 'invalidate_roster_cache']);
         add_action('template_redirect', [self::class, 'require_staff_for_scanner'], 1);
         add_action('template_redirect', [self::class, 'serve_manifest'], 0);
         add_action('wp_head', [self::class, 'scanner_app_meta']);
@@ -243,7 +246,20 @@ JS
      *
      * @return array<int,array{id:string,name:string,preferred_name:string,email:string}>
      */
+    /**
+     * Rebuilding this from every WooCommerce order (wc_get_orders hydrates
+     * a full WC_Order object plus line items per order) got slow as order
+     * volume grew close to the event, and both the admin Team Rosters
+     * screen and the public /team-rosters/ page call this on every request.
+     * Cached with a short safety-net TTL plus explicit invalidation
+     * (invalidate_roster_cache()) on anything that actually changes the
+     * roster's contents: order status changes, allocated ticket
+     * save/delete, and preferred-name edits.
+     */
     public static function attendee_roster(): array {
+        $cached = get_transient(self::ROSTER_CACHE_KEY);
+        if (is_array($cached)) return $cached;
+
         $roster = [];
         if (function_exists('wc_get_orders')) {
             $orders = wc_get_orders(['limit' => -1, 'orderby' => 'date', 'order' => 'ASC']);
@@ -275,7 +291,12 @@ JS
             ];
         }
         usort($roster, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+        set_transient(self::ROSTER_CACHE_KEY, $roster, self::ROSTER_CACHE_TTL);
         return $roster;
+    }
+
+    public static function invalidate_roster_cache(): void {
+        delete_transient(self::ROSTER_CACHE_KEY);
     }
 
     public static function render_shortcode(): string {
@@ -682,6 +703,7 @@ JS
             $item->add_meta_data($key, $name, false);
         }
         $item->save();
+        self::invalidate_roster_cache();
 
         wp_safe_redirect(add_query_arg('tn_notice', 'saved', $redirect));
         exit;
@@ -1125,6 +1147,7 @@ JS
         update_post_meta($post_id, '_tn_alloc_email', $email);
         update_post_meta($post_id, '_tn_alloc_amount_paid', $amount);
         update_post_meta($post_id, '_tn_alloc_note', $note);
+        self::invalidate_roster_cache();
         wp_safe_redirect(add_query_arg(['tn_alloc_notice' => 'saved', 'ticket_id' => $post_id], $redirect));
         exit;
     }
@@ -1136,6 +1159,7 @@ JS
         $post = get_post($post_id);
         if ($post instanceof WP_Post && $post->post_type === self::ALLOCATED_POST_TYPE) {
             wp_trash_post($post_id);
+            self::invalidate_roster_cache();
         }
         wp_safe_redirect(add_query_arg('tn_alloc_notice', 'deleted', self::allocated_admin_url()));
         exit;

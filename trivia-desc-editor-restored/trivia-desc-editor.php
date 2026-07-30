@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.4
+ * Version: 3.5
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -4503,6 +4503,16 @@ function tn_tde_team_roster_pool( $event_title, $exclude_signup_id = 0 ) {
 }
 
 /**
+ * Disabled 2026-07-29 at the owner's request while the admin Team Rosters
+ * screen is the sole source of truth for roster assignment. Flip back to
+ * true to restore the captain-facing "Choose Team Members" self-service
+ * flow on /manage-signups/.
+ */
+function tn_tde_captain_roster_editing_enabled() {
+	return false;
+}
+
+/**
  * Validates posted player ids against a freshly-built pool (closing the race
  * where two captains submit at the same time) and saves the accepted ones.
  *
@@ -4640,7 +4650,7 @@ function tn_tde_render_manage_signups_page() {
 	$roster_signup_id = 0;
 	$roster_meta = null;
 	$roster_pool = [];
-	if ( $email && isset( $_GET['tn_view'] ) && sanitize_key( wp_unslash( $_GET['tn_view'] ) ) === 'roster' ) {
+	if ( tn_tde_captain_roster_editing_enabled() && $email && isset( $_GET['tn_view'] ) && sanitize_key( wp_unslash( $_GET['tn_view'] ) ) === 'roster' ) {
 		$candidate_id = isset( $_GET['signup_id'] ) ? absint( $_GET['signup_id'] ) : 0;
 		if ( $candidate_id && in_array( $candidate_id, $signup_ids, true ) ) {
 			$candidate_meta = tn_tde_manage_signup_card_meta( $candidate_id );
@@ -5136,7 +5146,7 @@ function tn_tde_render_manage_signups_page() {
 								<?php else : ?>
 									<span class="tn-manage-card-when">Flight changes are not available for this event.</span>
 								<?php endif; ?>
-								<?php if ( $event && tn_tde_event_is_team_signup( $event ) ) : ?>
+								<?php if ( tn_tde_captain_roster_editing_enabled() && $event && tn_tde_event_is_team_signup( $event ) ) : ?>
 									<a class="tn-manage-roster-link" href="<?php echo esc_url( add_query_arg( [ 'tn_token' => $token, 'tn_view' => 'roster', 'signup_id' => $signup_id ], home_url( '/manage-signups/' ) ) ); ?>">Choose Team Members</a>
 								<?php endif; ?>
 								<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Cancel your <?php echo esc_js( $meta['event_title'] ?: 'event' ); ?> signup? This removes you from the list.');">
@@ -5283,6 +5293,9 @@ add_action( 'admin_post_nopriv_tn_tde_manage_team_roster_save', 'tn_tde_handle_m
 
 function tn_tde_handle_manage_team_roster_save() {
 	$context = tn_tde_manage_signup_guard( true );
+	if ( ! tn_tde_captain_roster_editing_enabled() ) {
+		$context['fail']( 'error' );
+	}
 	$signup_id = $context['signup_id'];
 	$event_slug = tn_tde_signup_meta_value( $signup_id, 'event_slug' );
 	$event = $event_slug ? tn_tde_get_event_by_detail_slug( $event_slug ) : null;

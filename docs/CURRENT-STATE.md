@@ -15,7 +15,7 @@ Last human review: 2026-07-29.
   Preferred Name per seat on multi-quantity ticket orders. A reusable
   **"Ticket Names"** admin screen (WooCommerce menu) edits any order's
   per-seat Preferred Name directly.
-- Event Schedule Manager v3.4 adds a team roster picker for team-based event
+- Event Schedule Manager v3.5 adds a team roster picker for team-based event
   signups: an admin "Team Rosters" screen (a team dropdown, grouped by
   event with a player count and an editable Team Name field, driving one
   shared picker panel, plus a per-event summary table of Total Teams/Total
@@ -24,14 +24,35 @@ Last human review: 2026-07-29.
   `/team-rosters/` page listing every team event's teams/captains/players
   (no emails, cached via a transient invalidated on roster/status/create
   writes so the page loads quickly), and a captain-facing "Choose Team
-  Members" screen on `/manage-signups/`, so registered ticket holders can be
-  assigned to a team instead of typed as free text, with cross-team
-  exclusion per event (scoped per base event title, not per flight —
-  confirmed intentional). Deployed and hash-verified live. The admin screen,
-  roster contents (including allocated tickets), CSV export, the public
-  page, and its caching are all verified working live; the captain-facing
-  "Choose Team Members" flow is not yet live-tested end to end (see
-  docs/HANDOFF.md).
+  Members" screen on `/manage-signups/` (currently **disabled** — see
+  below), so registered ticket holders can be assigned to a team instead
+  of typed as free text, with cross-team exclusion per event (scoped per
+  base event title, not per flight — confirmed intentional). Deployed and
+  hash-verified live. The admin screen, roster contents (including
+  allocated tickets), CSV export, the public page, and its caching are all
+  verified working live.
+- **2026-07-29: fixed real Team Rosters admin sluggishness and disabled
+  captain roster self-service**, both at the owner's explicit request.
+  `TN_My_Tickets::attendee_roster()` (My Tickets, now v0.6.1) now caches
+  its expensive full-order-rebuild result in a 15-minute transient,
+  invalidated on order status changes, allocated-ticket writes, and
+  preferred-name edits — the admin screen, CSV export, and the public
+  page's cache-builder all benefit since they share this function. The
+  captain-facing "Choose Team Members" flow is switched off via a single
+  `tn_tde_captain_roster_editing_enabled()` flag (Event Schedule Manager,
+  now v3.5) currently returning `false`; the admin Team Rosters screen is
+  unaffected and remains the only way to assign team members while this
+  is off. Both deployed and hash-verified; **not yet functionally
+  verified live** (requires an authenticated admin session or a real
+  captain magic-link token — see docs/HANDOFF.md).
+- **Live drift discovered 2026-07-29**: production was already running a
+  generalized waitlist feature (`tn_tde_signup_is_waitlist_event()`,
+  covering Quiz Bowl in addition to "All Trivia: The Gathering") not
+  present in `main`, matching an unmerged `agent/quiz-bowl-waitlist`
+  remote branch. Reconciled by patching the session's own changes onto
+  the live file rather than overwriting it (zero fuzz, confirmed no
+  overlap); the waitlist feature itself remains un-merged into `main` —
+  see docs/HANDOFF.md's next steps.
 - 29 solo (1-player) teams had their team name one-time-prefixed with
   "FA: " (blank names got "FA: {captain name}") via a temporary admin
   action, applied and confirmed live, then removed from source.
@@ -66,10 +87,14 @@ Last human review: 2026-07-29.
   live-verified end to end; the quota-pause path itself is verified by
   code inspection and a raw endpoint test, not by triggering it through a
   real authenticated AJAX batch send.
-- Event Schedule Manager also carries a production-only **"All Trivia: The
-  Gathering" waitlist feature** (discovered live on 2026-07-28, now captured
-  in Git for the first time) — signup for that event shows a waiting-list
-  form instead of flight selection once flights are full.
+- Event Schedule Manager also carries a **waitlist feature now generalized
+  to Quiz Bowl in addition to "All Trivia: The Gathering"** — signup for
+  either event shows a waiting-list form instead of flight selection once
+  flights are full. The original TTG-only version was discovered live on
+  2026-07-28 and captured in Git; the Quiz Bowl generalization was found
+  live again on 2026-07-29 (from the unmerged `agent/quiz-bowl-waitlist`
+  branch) and preserved during that day's deploy, but **is still not in
+  `main`** — see docs/HANDOFF.md's next steps.
 - The only valid purchased admission product is exactly **Trivia Nationals 2026
   Ticket**, production WooCommerce product ID `18347`.
 - Allocated tickets use the `TN26A-####` number format and participate in ticket
