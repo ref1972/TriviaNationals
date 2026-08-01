@@ -2,6 +2,32 @@
 
 Last human review: 2026-07-29.
 
+## Pop Culture Bee launch candidate (local/pushed source only)
+
+- The consolidated standalone implementation is in `pop-culture-bee-quiz/`.
+  Baseline `82d6648` is on `main`; additional launch hardening is being prepared
+  on `codex/pop-culture-bee-launch-readiness`. Nothing is deployed publicly and
+  no real invitation email has been sent.
+- Locally verified: CASS-style responsive light/dark UI, editable
+  category/question/answer/aliases before attempts begin, server-authoritative
+  timing and abandonment, CASS-compatible answer matching, grouped review,
+  technical restarts, encrypted/rotatable invitation links, and ranking by
+  score then total server-measured time across correct answers.
+- Workspace invitation delivery is implemented as explicit test/quota/batch
+  admin actions. It sends at most five per batch, persists per-player status,
+  pauses on the first error/quota event, and never calls `wp_mail()`.
+- The tracked Apps Script now has an authenticated `email_quota` action and
+  returns quota metadata for `send_email`; this source change is **not deployed**
+  to Apps Script yet.
+- Automated verification currently passes 20/20 tests, TypeScript, checkpoint
+  safety checks, fresh-database preflight, consistent SQLite backup, health,
+  login, invitation redirect, and link rotation. Docker packaging exists but
+  could not be built locally because Docker is not installed on this Mac.
+- Remaining owner/external work: final question/category/alias review, final
+  player list, cut-line N, host/domain/TLS selection, production secrets,
+  Apps Script redeploy, one real test email, phone/network rehearsal, and the
+  deliberate real send.
+
 ## Live and verified
 
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.

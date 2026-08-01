@@ -1,6 +1,51 @@
 # Current handoff
 
-Last updated: 2026-07-30.
+Last updated: 2026-07-31.
+
+## 2026-07-31 — Pop Culture Bee overnight launch-readiness work
+
+- Claude's consolidated baseline was committed/pushed to `main` at `82d6648`.
+  Codex then created `codex/pop-culture-bee-launch-readiness` for isolated
+  hardening. No production deploy and no real email send occurred.
+- Implemented the required score tiebreak: each finalized exposure stores
+  server-measured `elapsed_ms` capped at the question deadline; results and CSV
+  sort by score descending then total correct-answer time ascending.
+- Fixed technical restarts after cutoff: a player whose latest attempt was
+  explicitly superseded with an admin restart reason may start the replacement
+  generation after the general start cutoff; never-started players remain
+  closed.
+- Invitation tokens are now stored as both a lookup hash and AES-256-GCM
+  ciphertext under a separate production encryption key. Admin can rotate a
+  lost/compromised link, which invalidates the old URL and resets delivery
+  state.
+- Added Workspace invitation email controls: live quota check, test send, and
+  confirmed five-recipient batches with per-player attempts/sent/error state.
+  A failed or quota-exhausted recipient is not advanced; the sender stops and
+  never falls back to `wp_mail()`.
+- Added Apps Script `email_quota` and quota metadata around `send_email`.
+  **Source only: the Apps Script web app must be redeployed in the morning.**
+- Added Docker/Compose packaging, a read-only production preflight, a
+  consistent SQLite backup script, admin login throttling, and deployment
+  documentation.
+- Verification: 20/20 Node tests; `npm run typecheck`; `git diff --check`;
+  `scripts/project-checkpoint.sh --check`; fresh database seed/preflight;
+  SQLite backup; localhost health, invitation redirect, admin login/dashboard,
+  and invitation rotation. Docker image not built because Docker is absent.
+
+### Morning blockers / deliberate owner actions
+
+1. Review/finalize the 50 questions, categories, answers, and aliases before
+   any real attempt; the current Tangents-derived set includes some unused
+   source material and is a starting set, not final editorial approval.
+2. Decide the advancing cut N and production hostname/host.
+3. Provision HTTPS, one application instance, persistent `/data`, backups, and
+   production secrets; run `npm run preflight`.
+4. Redeploy the existing Apps Script web app with the tracked quota endpoint;
+   configure relay URL/secret on the quiz host.
+5. Send exactly one real test invitation, inspect delivery/headers and live
+   quota, then rehearse on real phones and poor connectivity.
+6. Import the final ~70 players only after the bank is frozen and reviewed;
+   use the admin's confirmed batches for the deliberate real send.
 
 ## Recently completed
 

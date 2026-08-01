@@ -1,7 +1,8 @@
 # Pop Culture Bee — preliminary online quiz
 
-Status: **planned, no code written.** This document is the agreed design;
-update it as implementation proceeds.
+Status: **consolidated implementation committed; launch hardening in progress.**
+The active application is `pop-culture-bee-quiz/`. The earlier Claude and
+Codex prototype directories remain for comparison only.
 
 Owner decisions recorded 2026-07-31. Where this document states an assumption
 rather than a decision, it says so explicitly.

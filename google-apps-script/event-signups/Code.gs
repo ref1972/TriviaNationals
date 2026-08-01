@@ -52,6 +52,10 @@ function doPost(e) {
       return jsonResponse({ ok: true, action: 'ping' });
     }
 
+    if (payload.action === 'email_quota') {
+      return jsonResponse({ ok: true, action: 'email_quota', remaining: MailApp.getRemainingDailyQuota() });
+    }
+
     if (payload.action === 'event_signup_email_summary') {
       if (!payload.email) {
         return jsonResponse({ ok: false, error: 'Missing email' });
@@ -73,13 +77,17 @@ function doPost(e) {
       }
       const htmlBody = String(payload.html_body || '');
       const plainBody = String(payload.plain_body || '') || htmlBody.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const remainingBefore = MailApp.getRemainingDailyQuota();
+      if (remainingBefore < 1) {
+        return jsonResponse({ ok: false, error: 'Apps Script email quota exhausted', quota_exhausted: true, remaining: 0 });
+      }
       GmailApp.sendEmail(to, String(payload.subject), plainBody, {
         htmlBody: htmlBody,
         from: SUMMARY_FROM_EMAIL,
         replyTo: SUMMARY_FROM_EMAIL,
         name: SUMMARY_FROM_NAME,
       });
-      return jsonResponse({ ok: true, action: 'sent', to: to });
+      return jsonResponse({ ok: true, action: 'sent', to: to, remaining: MailApp.getRemainingDailyQuota() });
     }
 
     if (payload.action === 'event_signup_delete') {

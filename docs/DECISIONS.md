@@ -124,3 +124,27 @@ data store.
   gated by preview and confirmation.
 - The future scores application is not assumed to be WordPress; its technology
   choice remains open.
+## 2026-07-31 — Pop Culture Bee uses one Node/SQLite instance and Workspace-only invitation delivery
+
+The launch candidate is the consolidated `pop-culture-bee-quiz/` Node 24,
+Express, and SQLite application. Production must run one always-on instance
+with persistent storage and HTTPS. Invitation links are hashed for lookup and
+encrypted separately for controlled resend/rotation. Invitation email goes
+directly through the existing Google Workspace Apps Script relay in small,
+quota-preflighted batches and has no `wp_mail()` fallback.
+
+Reason: roughly 70 players do not justify distributed infrastructure, while a
+single persistent SQLite database is easy to audit and back up. The confirmed
+HostGator fallback can report success while dropping mail, so stopping safely
+is more important than finishing a batch through an untrusted path.
+
+## 2026-07-31 — Pop Culture Bee ties use total server-measured correct-answer time
+
+Rank by score descending, then the sum of `elapsed_ms` for scored-correct
+answers ascending. Each elapsed value is measured from server `served_at` to
+server finalization and capped at the visible question window, so the hidden
+transport grace does not add tiebreak time. Email is only a final deterministic
+ordering if both score and correct-answer time are identical.
+
+Reason: this implements the recorded design requirement and makes the top-N
+cut reproducible without trusting a player's clock.

@@ -85,3 +85,23 @@ infrastructure.
   created by `scripts/wp-plugin-ftps.sh`.
 - Scores placeholder: restore the prior tracked `index.html` from Git and upload
   that single file.
+
+## Pop Culture Bee quiz (not deployed)
+
+- Source: `pop-culture-bee-quiz/`.
+- Runtime: one Node 24 container/process and one persistent SQLite database.
+- Packaging: `Dockerfile` plus `compose.example.yaml`; mount `/data` persistently
+  and expose the application only through an HTTPS reverse proxy.
+- Never run more than one application instance against this SQLite database.
+- Production configuration follows `.env.example`; secrets belong in the
+  host's secret/environment storage, never Git.
+- Before release, run `npm run preflight` against the intended database and
+  `scripts/backup-db.sh` for a consistent SQLite online backup.
+- Verify `/health`, the release identifier, one test invitation, mobile timing,
+  admin review, restart, and result ordering before sending real invitations.
+- Workspace email requires redeploying
+  `google-apps-script/event-signups/Code.gs`, then configuring
+  `EMAIL_RELAY_URL`/`EMAIL_RELAY_SECRET`. The quiz sender intentionally has no
+  HostGator/`wp_mail()` fallback.
+- No production host, domain, DNS, TLS, volume, or process supervisor has been
+  configured yet.
