@@ -1,0 +1,188 @@
+/* Mobile-first. Most players will be on a phone, one-handed, in a hurry. */
+
+:root {
+  --bg: #10101a;
+  --panel: #1b1b2a;
+  --panel-edge: #2c2c42;
+  --ink: #f2f2f7;
+  --ink-dim: #a0a0b8;
+  --accent: #ffd23f;
+  --accent-ink: #1a1a10;
+  --warn: #ff8a5c;
+  --urgent: #ff5470;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 17px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.shell {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.15rem 3rem;
+  padding-bottom: max(3rem, env(safe-area-inset-bottom));
+}
+
+/* --- Branding ------------------------------------------------------------ */
+
+.brand { text-align: center; margin: 1.5rem 0 1.75rem; }
+.kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.brand h1 {
+  margin: 0.3rem 0 0;
+  font-size: 2rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.greeting { text-align: center; color: var(--ink-dim); margin: 0 0 1.25rem; }
+
+/* --- Cards --------------------------------------------------------------- */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  padding: 1.1rem 1.15rem;
+  margin: 0 0 1rem;
+}
+.card h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+.card ul { margin: 0; padding-left: 1.15rem; }
+.card li { margin-bottom: 0.55rem; }
+.card li:last-child { margin-bottom: 0; }
+.card p { margin: 0 0 0.7rem; }
+.card p:last-child { margin-bottom: 0; }
+
+.warn { border-color: rgba(255, 138, 92, 0.45); }
+.warn h2 { color: var(--warn); }
+
+.deadline {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.92rem;
+  margin: 1.25rem 0;
+}
+
+/* --- Question screen ----------------------------------------------------- */
+
+.qhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.progress {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.clock.urgent { color: var(--urgent); }
+
+.timerbar {
+  height: 5px;
+  background: var(--panel-edge);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+.timerbar-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.question { padding: 1.4rem 1.25rem; }
+.prompt {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.answer { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.answer input[type="text"] {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  font-size: 1.15rem;
+  color: var(--ink);
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: 12px;
+}
+.answer input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.answer input[readonly] { opacity: 0.6; }
+
+/* --- Buttons ------------------------------------------------------------- */
+
+button.primary {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+button.primary:disabled { opacity: 0.5; cursor: default; }
+.actions { margin: 1.5rem 0 0.75rem; }
+
+/* --- Finished ------------------------------------------------------------ */
+
+.done h2 { font-size: 1.35rem; color: var(--accent); }
+.lead { font-size: 1.1rem; }
+
+.fineprint {
+  text-align: center;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  min-height: 1.2em;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
