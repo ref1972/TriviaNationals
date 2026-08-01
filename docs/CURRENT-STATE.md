@@ -2,12 +2,14 @@
 
 Last human review: 2026-07-29.
 
-## Pop Culture Bee launch candidate (local/pushed source only)
+## Timed Quiz / Pop Culture Bee (standalone project)
 
-- The consolidated standalone implementation is in `pop-culture-bee-quiz/`.
-  Baseline `82d6648` is on `main`; additional launch hardening is being prepared
-  on `codex/pop-culture-bee-launch-readiness`. Nothing is deployed publicly and
-  no real invitation email has been sent.
+- The application and its path-specific Git history were extracted on
+  2026-08-01 to [ref1972/timedquiz](https://github.com/ref1972/timedquiz) and
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`. TriviaNationals no
+  longer owns duplicate application source; it retains the shared Workspace
+  Apps Script used by the quiz and other live systems. Nothing is deployed
+  publicly and no real invitation email has been sent.
 - Locally verified: CASS-style responsive light/dark UI, editable
   category/question/answer/aliases before attempts begin, server-authoritative
   timing and abandonment, CASS-compatible answer matching, grouped review,

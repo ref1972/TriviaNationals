@@ -88,7 +88,9 @@ infrastructure.
 
 ## Pop Culture Bee quiz (not deployed)
 
-- Source: `pop-culture-bee-quiz/`.
+- Source and detailed deployment record moved to
+  [ref1972/timedquiz](https://github.com/ref1972/timedquiz). Local checkout:
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`.
 - Selected public URL: `https://bee.triviaworkshop.com`.
 - Selected host: the existing CASS DigitalOcean droplet. Keep the quiz
   isolated from CASS with separate code, data, and backup directories, a
@@ -97,14 +99,10 @@ infrastructure.
 - The droplet currently runs Node 20 for CASS and does not have Docker. The
   quiz requires Node 24 for `node:sqlite`; install Node 24 side by side and do
   not replace CASS's runtime.
-- Runtime: one Node 24 container/process and one persistent SQLite database.
-- Packaging: `Dockerfile` plus `compose.example.yaml`; mount `/data` persistently
-  and expose the application only through an HTTPS reverse proxy.
+- Runtime: one Node 24 process and one persistent SQLite database.
 - Never run more than one application instance against this SQLite database.
-- Production configuration follows `.env.example`; secrets belong in the
-  host's secret/environment storage, never Git.
-- Before release, run `npm run preflight` against the intended database and
-  `scripts/backup-db.sh` for a consistent SQLite online backup.
+- Production configuration, preflight, backup, verification, and rollback
+  instructions now live in the Timed Quiz repository.
 - Verify `/health`, the release identifier, one test invitation, mobile timing,
   admin review, restart, and result ordering before sending real invitations.
 - Workspace email requires redeploying

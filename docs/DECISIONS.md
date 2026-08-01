@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-08-01 — Timed Quiz moved to a standalone repository
+
+The reusable quiz application and its path history moved to
+[ref1972/timedquiz](https://github.com/ref1972/timedquiz). This repository keeps
+the shared Apps Script relay source because it also serves existing Trivia
+Nationals production systems, plus a pointer to the standalone project.
+
+Reason: Timed Quiz has its own runtime, database, domain, deployment, and
+release cycle. Keeping duplicate application source in both repositories would
+create an immediate source-of-truth and deployment-drift risk.
+
 ## 2026-08-01 — Host Pop Culture Bee beside CASS at `bee.triviaworkshop.com`
 
 The production target is the existing CASS DigitalOcean droplet, using a
@@ -138,8 +149,8 @@ data store.
   choice remains open.
 ## 2026-07-31 — Pop Culture Bee uses one Node/SQLite instance and Workspace-only invitation delivery
 
-The launch candidate is the consolidated `pop-culture-bee-quiz/` Node 24,
-Express, and SQLite application. Production must run one always-on instance
+The launch candidate (now maintained in `ref1972/timedquiz`) is a consolidated
+Node 24, Express, and SQLite application. Production must run one always-on instance
 with persistent storage and HTTPS. Invitation links are hashed for lookup and
 encrypted separately for controlled resend/rotation. Invitation email goes
 directly through the existing Google Workspace Apps Script relay in small,

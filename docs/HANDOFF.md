@@ -2,6 +2,24 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — Timed Quiz extracted from TriviaNationals
+
+- Owner named the standalone project **Timed Quiz** and created
+  [ref1972/timedquiz](https://github.com/ref1972/timedquiz). The consolidated
+  application was extracted with its path-specific Git history and published
+  on that repository's `main`; local checkout is
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`.
+- The new repository contains its own `PROJECT.md`, `AGENTS.md`, current state,
+  decisions, deployment, handoff, and historical design records. Independent
+  verification passes 20/20 tests, TypeScript, diff checks, dependency audit,
+  and a secret-pattern scan.
+- The shared Workspace Apps Script remains here because Event Signups and
+  Announcements also use it. Duplicate quiz application/design source was
+  removed here and replaced with `docs/TIMED-QUIZ.md`.
+- A nondeterministic release test was fixed during extraction: changing the
+  final Base64URL character could alter only unused bits and decode to the same
+  ciphertext. The test now changes an authenticated ciphertext character.
+
 ## 2026-08-01 — Pop Culture Bee deployment target selected
 
 - Owner selected the existing CASS DigitalOcean droplet and the

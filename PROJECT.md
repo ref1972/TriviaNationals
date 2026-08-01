@@ -17,7 +17,7 @@ It is also the durable project memory shared by Claude and Codex.
 | WooCommerce Google Sheets Sync | `woocommerce-google-sheets-sync/` | Synchronizes WooCommerce order information with Google Sheets |
 | Event Signups Apps Script | `google-apps-script/event-signups/Code.gs` | Google-side integration for event signup data |
 | Scores placeholder | `scores-site/index.html` | Static coming-soon page for the future scoring dashboard |
-| Pop Culture Bee quiz | `pop-culture-bee-quiz/` | Standalone Node/Express/SQLite preliminary quiz with personalized invitations, server-authoritative 20-second questions, CASS-compatible grading, review queue, ranked results, and quota-safe Workspace invitation delivery |
+| Timed Quiz / Pop Culture Bee | [ref1972/timedquiz](https://github.com/ref1972/timedquiz) | Standalone project extracted from this repository; TriviaNationals retains only the shared Workspace Apps Script integration |
 
 ## Key public/admin surfaces
 
