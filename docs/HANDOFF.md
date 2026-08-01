@@ -1,6 +1,19 @@
 # Current handoff
 
-Last updated: 2026-07-31.
+Last updated: 2026-08-01.
+
+## 2026-08-01 — Pop Culture Bee deployment target selected
+
+- Owner selected the existing CASS DigitalOcean droplet and the
+  `triviaworkshop.com` domain. Planned public URL is
+  `https://bee.triviaworkshop.com`; no DNS or production change has been made.
+- Read-only host checks found low CPU load, 16 GB free disk, roughly 438 MB
+  available memory plus swap, nginx/Certbot active, and CASS on ports
+  3000/3001. This is sufficient for the expected ~70-player Express/SQLite
+  launch.
+- The droplet has Node 20 and no Docker. Deploy the quiz with a side-by-side
+  Node 24 runtime, a dedicated service and localhost port, separate persistent
+  data/backups, and a separate nginx virtual host so CASS remains untouched.
 
 ## 2026-07-31 — Pop Culture Bee overnight launch-readiness work
 
@@ -37,7 +50,7 @@ Last updated: 2026-07-31.
 1. Review/finalize the 50 questions, categories, answers, and aliases before
    any real attempt; the current Tangents-derived set includes some unused
    source material and is a starting set, not final editorial approval.
-2. Decide the advancing cut N and production hostname/host.
+2. Decide the advancing cut N. Host and hostname are now selected as above.
 3. Provision HTTPS, one application instance, persistent `/data`, backups, and
    production secrets; run `npm run preflight`.
 4. Redeploy the existing Apps Script web app with the tracked quota endpoint;

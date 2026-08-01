@@ -89,6 +89,14 @@ infrastructure.
 ## Pop Culture Bee quiz (not deployed)
 
 - Source: `pop-culture-bee-quiz/`.
+- Selected public URL: `https://bee.triviaworkshop.com`.
+- Selected host: the existing CASS DigitalOcean droplet. Keep the quiz
+  isolated from CASS with separate code, data, and backup directories, a
+  dedicated localhost port and service, and its own nginx virtual host and
+  certificate.
+- The droplet currently runs Node 20 for CASS and does not have Docker. The
+  quiz requires Node 24 for `node:sqlite`; install Node 24 side by side and do
+  not replace CASS's runtime.
 - Runtime: one Node 24 container/process and one persistent SQLite database.
 - Packaging: `Dockerfile` plus `compose.example.yaml`; mount `/data` persistently
   and expose the application only through an HTTPS reverse proxy.
@@ -103,5 +111,5 @@ infrastructure.
   `google-apps-script/event-signups/Code.gs`, then configuring
   `EMAIL_RELAY_URL`/`EMAIL_RELAY_SECRET`. The quiz sender intentionally has no
   HostGator/`wp_mail()` fallback.
-- No production host, domain, DNS, TLS, volume, or process supervisor has been
-  configured yet.
+- No quiz DNS record, TLS certificate, application directories, service,
+  production secrets, or database has been configured yet.

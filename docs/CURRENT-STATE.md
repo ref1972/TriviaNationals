@@ -23,8 +23,12 @@ Last human review: 2026-07-29.
   safety checks, fresh-database preflight, consistent SQLite backup, health,
   login, invitation redirect, and link rotation. Docker packaging exists but
   could not be built locally because Docker is not installed on this Mac.
+- Deployment target selected 2026-08-01: the existing CASS DigitalOcean
+  droplet, isolated from CASS at `https://bee.triviaworkshop.com` behind its
+  own nginx virtual host and certificate. DNS, TLS, service, and application
+  files have not been created yet.
 - Remaining owner/external work: final question/category/alias review, final
-  player list, cut-line N, host/domain/TLS selection, production secrets,
+  player list, cut-line N, DNS/TLS provisioning, production secrets,
   Apps Script redeploy, one real test email, phone/network rehearsal, and the
   deliberate real send.
 

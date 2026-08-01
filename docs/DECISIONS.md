@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-08-01 — Host Pop Culture Bee beside CASS at `bee.triviaworkshop.com`
+
+The production target is the existing CASS DigitalOcean droplet, using a
+separate nginx virtual host at `https://bee.triviaworkshop.com`. The quiz will
+have its own localhost port, service, persistent data directory, backups, and
+side-by-side Node 24 runtime; CASS stays on its current Node 20/PM2 processes.
+
+Reason: the droplet is already stable, lightly loaded, and equipped with
+nginx/Certbot. Reusing it avoids provisioning another host for a small,
+short-lived ~70-player workload while preserving operational isolation from
+CASS.
+
 ## 2026-07-29 — Never spend the quota-exhausted recipient on the fallback mailer
 
 A Codex code review of `32579cb` found that the v0.4.1 quota-pause logic

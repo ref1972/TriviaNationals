@@ -120,10 +120,8 @@ Requirements the choice must satisfy either way:
 
 ### Hosting target
 
-A dedicated subdomain, `quiz.trivianationals.org` or `bee.trivianationals.org`,
-pointed at whichever host is chosen. If HostGator, follow the
-`scores.trivianationals.org` pattern in `docs/DEPLOYMENT.md`; if a PaaS, a CNAME
-from cPanel DNS.
+The selected subdomain is `bee.triviaworkshop.com`, pointed at the existing
+CASS DigitalOcean droplet and served through a separate nginx virtual host.
 
 The database must not be reachable from the web document root.
 
@@ -302,6 +300,6 @@ Asked 2026-07-31, not yet answered:
 ## Other open items
 
 1. Ratify the language and hosting choice (see Architecture).
-2. Choose the subdomain name.
+2. Provision the selected `bee.triviaworkshop.com` DNS record and TLS.
 3. Confirm whether the Apps Script relay can send for a non-WordPress caller.
 4. Verify the datastore and runtime available on whichever host is chosen.
