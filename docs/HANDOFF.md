@@ -9,8 +9,9 @@ Last updated: 2026-08-01.
   tracked `email_quota` action and quota metadata; its URL did not change.
 - Timed Quiz authenticated against it successfully. The first quota check
   returned 97, one explicitly authorized test invitation was accepted, and the
-  relay returned 96 afterward. No batch or real-player message was sent;
-  inbox/header confirmation is pending in the Timed Quiz project.
+  relay returned 96 afterward. The owner confirmed inbox delivery and a working
+  personalized production link. No batch or real-player message was sent;
+  header inspection remains pending in the Timed Quiz project.
 - The existing shared secret was surfaced during authenticated setup. Rotate it
   before the real send in Apps Script Script Properties, WordPress Signup
   Settings, and Timed Quiz's server environment.

@@ -114,7 +114,8 @@ Last human review: 2026-07-29.
 - On 2026-08-01 the existing Workspace-owned Web App was redeployed as Version
   5 with the tracked `email_quota` action and quota metadata. Timed Quiz
   authenticated successfully: quota reported 97, one authorized test message
-  was accepted, and quota reported 96. Inbox/header confirmation remains
+  was accepted, and quota reported 96. The owner confirmed inbox delivery and
+  that the personalized production link worked; header inspection remains
   pending. Rotate the shared secret across Apps Script, WordPress, and Timed
   Quiz before any real batch because it was surfaced during setup.
 - **Announcements plugin (`trivia-nationals-announcements/`) is live at
