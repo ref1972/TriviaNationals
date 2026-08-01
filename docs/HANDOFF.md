@@ -2,6 +2,19 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — Shared Workspace relay redeployed for Timed Quiz
+
+- The existing `info@trivianationals.org`-owned Web App deployment matching
+  WordPress's configured endpoint was updated in place as Version 5 with the
+  tracked `email_quota` action and quota metadata; its URL did not change.
+- Timed Quiz authenticated against it successfully. The first quota check
+  returned 97, one explicitly authorized test invitation was accepted, and the
+  relay returned 96 afterward. No batch or real-player message was sent;
+  inbox/header confirmation is pending in the Timed Quiz project.
+- The existing shared secret was surfaced during authenticated setup. Rotate it
+  before the real send in Apps Script Script Properties, WordPress Signup
+  Settings, and Timed Quiz's server environment.
+
 ## 2026-08-01 — Timed Quiz extracted from TriviaNationals
 
 - Owner named the standalone project **Timed Quiz** and created
@@ -23,8 +36,9 @@ Last updated: 2026-08-01.
 ## 2026-08-01 — Pop Culture Bee deployment target selected
 
 - Owner selected the existing CASS DigitalOcean droplet and the
-  `triviaworkshop.com` domain. Planned public URL is
-  `https://bee.triviaworkshop.com`; no DNS or production change has been made.
+  `triviaworkshop.com` domain. `https://bee.triviaworkshop.com` is now live as
+  a rehearsal deployment; current operational detail is maintained in
+  [ref1972/timedquiz](https://github.com/ref1972/timedquiz).
 - Read-only host checks found low CPU load, 16 GB free disk, roughly 438 MB
   available memory plus swap, nginx/Certbot active, and CASS on ports
   3000/3001. This is sufficient for the expected ~70-player Express/SQLite

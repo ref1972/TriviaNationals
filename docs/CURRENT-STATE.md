@@ -111,6 +111,12 @@ Last human review: 2026-07-29.
   `marketing@` are Workspace aliases on the `info@` user with Gmail filters
   forwarding externally, replicating the old HostGator forwarders. See
   docs/HANDOFF.md and docs/DECISIONS.md for details and remaining gaps.
+- On 2026-08-01 the existing Workspace-owned Web App was redeployed as Version
+  5 with the tracked `email_quota` action and quota metadata. Timed Quiz
+  authenticated successfully: quota reported 97, one authorized test message
+  was accepted, and quota reported 96. Inbox/header confirmation remains
+  pending. Rotate the shared secret across Apps Script, WordPress, and Timed
+  Quiz before any real batch because it was surfaced during setup.
 - **Announcements plugin (`trivia-nationals-announcements/`) is live at
   v0.4.2** (deployed and hash-verified 2026-07-29; committed and pushed to
   `main` — see docs/HANDOFF.md): a native-CPT admin screen for authoring
