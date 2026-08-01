@@ -2,6 +2,38 @@
 
 Last human review: 2026-07-29.
 
+## Timed Quiz / Pop Culture Bee (standalone project)
+
+- The application and its path-specific Git history were extracted on
+  2026-08-01 to [ref1972/timedquiz](https://github.com/ref1972/timedquiz) and
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`. TriviaNationals no
+  longer owns duplicate application source; it retains the shared Workspace
+  Apps Script used by the quiz and other live systems. Nothing is deployed
+  publicly and no real invitation email has been sent.
+- Locally verified: CASS-style responsive light/dark UI, editable
+  category/question/answer/aliases before attempts begin, server-authoritative
+  timing and abandonment, CASS-compatible answer matching, grouped review,
+  technical restarts, encrypted/rotatable invitation links, and ranking by
+  score then total server-measured time across correct answers.
+- Workspace invitation delivery is implemented as explicit test/quota/batch
+  admin actions. It sends at most five per batch, persists per-player status,
+  pauses on the first error/quota event, and never calls `wp_mail()`.
+- The tracked Apps Script now has an authenticated `email_quota` action and
+  returns quota metadata for `send_email`; this source change is **not deployed**
+  to Apps Script yet.
+- Automated verification currently passes 20/20 tests, TypeScript, checkpoint
+  safety checks, fresh-database preflight, consistent SQLite backup, health,
+  login, invitation redirect, and link rotation. Docker packaging exists but
+  could not be built locally because Docker is not installed on this Mac.
+- Deployment target selected 2026-08-01: the existing CASS DigitalOcean
+  droplet, isolated from CASS at `https://bee.triviaworkshop.com` behind its
+  own nginx virtual host and certificate. DNS, TLS, service, and application
+  files have not been created yet.
+- Remaining owner/external work: final question/category/alias review, final
+  player list, cut-line N, DNS/TLS provisioning, production secrets,
+  Apps Script redeploy, one real test email, phone/network rehearsal, and the
+  deliberate real send.
+
 ## Live and verified
 
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.

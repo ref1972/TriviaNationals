@@ -1,6 +1,82 @@
 # Current handoff
 
-Last updated: 2026-07-30.
+Last updated: 2026-08-01.
+
+## 2026-08-01 — Timed Quiz extracted from TriviaNationals
+
+- Owner named the standalone project **Timed Quiz** and created
+  [ref1972/timedquiz](https://github.com/ref1972/timedquiz). The consolidated
+  application was extracted with its path-specific Git history and published
+  on that repository's `main`; local checkout is
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`.
+- The new repository contains its own `PROJECT.md`, `AGENTS.md`, current state,
+  decisions, deployment, handoff, and historical design records. Independent
+  verification passes 20/20 tests, TypeScript, diff checks, dependency audit,
+  and a secret-pattern scan.
+- The shared Workspace Apps Script remains here because Event Signups and
+  Announcements also use it. Duplicate quiz application/design source was
+  removed here and replaced with `docs/TIMED-QUIZ.md`.
+- A nondeterministic release test was fixed during extraction: changing the
+  final Base64URL character could alter only unused bits and decode to the same
+  ciphertext. The test now changes an authenticated ciphertext character.
+
+## 2026-08-01 — Pop Culture Bee deployment target selected
+
+- Owner selected the existing CASS DigitalOcean droplet and the
+  `triviaworkshop.com` domain. Planned public URL is
+  `https://bee.triviaworkshop.com`; no DNS or production change has been made.
+- Read-only host checks found low CPU load, 16 GB free disk, roughly 438 MB
+  available memory plus swap, nginx/Certbot active, and CASS on ports
+  3000/3001. This is sufficient for the expected ~70-player Express/SQLite
+  launch.
+- The droplet has Node 20 and no Docker. Deploy the quiz with a side-by-side
+  Node 24 runtime, a dedicated service and localhost port, separate persistent
+  data/backups, and a separate nginx virtual host so CASS remains untouched.
+
+## 2026-07-31 — Pop Culture Bee overnight launch-readiness work
+
+- Claude's consolidated baseline was committed/pushed to `main` at `82d6648`.
+  Codex then created `codex/pop-culture-bee-launch-readiness` for isolated
+  hardening. No production deploy and no real email send occurred.
+- Implemented the required score tiebreak: each finalized exposure stores
+  server-measured `elapsed_ms` capped at the question deadline; results and CSV
+  sort by score descending then total correct-answer time ascending.
+- Fixed technical restarts after cutoff: a player whose latest attempt was
+  explicitly superseded with an admin restart reason may start the replacement
+  generation after the general start cutoff; never-started players remain
+  closed.
+- Invitation tokens are now stored as both a lookup hash and AES-256-GCM
+  ciphertext under a separate production encryption key. Admin can rotate a
+  lost/compromised link, which invalidates the old URL and resets delivery
+  state.
+- Added Workspace invitation email controls: live quota check, test send, and
+  confirmed five-recipient batches with per-player attempts/sent/error state.
+  A failed or quota-exhausted recipient is not advanced; the sender stops and
+  never falls back to `wp_mail()`.
+- Added Apps Script `email_quota` and quota metadata around `send_email`.
+  **Source only: the Apps Script web app must be redeployed in the morning.**
+- Added Docker/Compose packaging, a read-only production preflight, a
+  consistent SQLite backup script, admin login throttling, and deployment
+  documentation.
+- Verification: 20/20 Node tests; `npm run typecheck`; `git diff --check`;
+  `scripts/project-checkpoint.sh --check`; fresh database seed/preflight;
+  SQLite backup; localhost health, invitation redirect, admin login/dashboard,
+  and invitation rotation. Docker image not built because Docker is absent.
+
+### Morning blockers / deliberate owner actions
+
+1. Review/finalize the 50 questions, categories, answers, and aliases before
+   any real attempt; the current Tangents-derived set includes some unused
+   source material and is a starting set, not final editorial approval.
+2. Decide the advancing cut N. Host and hostname are now selected as above.
+3. Provision HTTPS, one application instance, persistent `/data`, backups, and
+   production secrets; run `npm run preflight`.
+4. Redeploy the existing Apps Script web app with the tracked quota endpoint;
+   configure relay URL/secret on the quiz host.
+5. Send exactly one real test invitation, inspect delivery/headers and live
+   quota, then rehearse on real phones and poor connectivity.
+6. Import the final ~70 players only after the bank is frozen and reviewed;
+   use the admin's confirmed batches for the deliberate real send.
 
 ## Recently completed
 

@@ -85,3 +85,29 @@ infrastructure.
   created by `scripts/wp-plugin-ftps.sh`.
 - Scores placeholder: restore the prior tracked `index.html` from Git and upload
   that single file.
+
+## Pop Culture Bee quiz (not deployed)
+
+- Source and detailed deployment record moved to
+  [ref1972/timedquiz](https://github.com/ref1972/timedquiz). Local checkout:
+  `/Users/russellefriedewald/Documents/Projects/TimedQuiz`.
+- Selected public URL: `https://bee.triviaworkshop.com`.
+- Selected host: the existing CASS DigitalOcean droplet. Keep the quiz
+  isolated from CASS with separate code, data, and backup directories, a
+  dedicated localhost port and service, and its own nginx virtual host and
+  certificate.
+- The droplet currently runs Node 20 for CASS and does not have Docker. The
+  quiz requires Node 24 for `node:sqlite`; install Node 24 side by side and do
+  not replace CASS's runtime.
+- Runtime: one Node 24 process and one persistent SQLite database.
+- Never run more than one application instance against this SQLite database.
+- Production configuration, preflight, backup, verification, and rollback
+  instructions now live in the Timed Quiz repository.
+- Verify `/health`, the release identifier, one test invitation, mobile timing,
+  admin review, restart, and result ordering before sending real invitations.
+- Workspace email requires redeploying
+  `google-apps-script/event-signups/Code.gs`, then configuring
+  `EMAIL_RELAY_URL`/`EMAIL_RELAY_SECRET`. The quiz sender intentionally has no
+  HostGator/`wp_mail()` fallback.
+- No quiz DNS record, TLS certificate, application directories, service,
+  production secrets, or database has been configured yet.

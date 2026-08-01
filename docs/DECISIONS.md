@@ -1,5 +1,28 @@
 # Decisions
 
+## 2026-08-01 — Timed Quiz moved to a standalone repository
+
+The reusable quiz application and its path history moved to
+[ref1972/timedquiz](https://github.com/ref1972/timedquiz). This repository keeps
+the shared Apps Script relay source because it also serves existing Trivia
+Nationals production systems, plus a pointer to the standalone project.
+
+Reason: Timed Quiz has its own runtime, database, domain, deployment, and
+release cycle. Keeping duplicate application source in both repositories would
+create an immediate source-of-truth and deployment-drift risk.
+
+## 2026-08-01 — Host Pop Culture Bee beside CASS at `bee.triviaworkshop.com`
+
+The production target is the existing CASS DigitalOcean droplet, using a
+separate nginx virtual host at `https://bee.triviaworkshop.com`. The quiz will
+have its own localhost port, service, persistent data directory, backups, and
+side-by-side Node 24 runtime; CASS stays on its current Node 20/PM2 processes.
+
+Reason: the droplet is already stable, lightly loaded, and equipped with
+nginx/Certbot. Reusing it avoids provisioning another host for a small,
+short-lived ~70-player workload while preserving operational isolation from
+CASS.
+
 ## 2026-07-29 — Never spend the quota-exhausted recipient on the fallback mailer
 
 A Codex code review of `32579cb` found that the v0.4.1 quota-pause logic
@@ -124,3 +147,27 @@ data store.
   gated by preview and confirmation.
 - The future scores application is not assumed to be WordPress; its technology
   choice remains open.
+## 2026-07-31 — Pop Culture Bee uses one Node/SQLite instance and Workspace-only invitation delivery
+
+The launch candidate (now maintained in `ref1972/timedquiz`) is a consolidated
+Node 24, Express, and SQLite application. Production must run one always-on instance
+with persistent storage and HTTPS. Invitation links are hashed for lookup and
+encrypted separately for controlled resend/rotation. Invitation email goes
+directly through the existing Google Workspace Apps Script relay in small,
+quota-preflighted batches and has no `wp_mail()` fallback.
+
+Reason: roughly 70 players do not justify distributed infrastructure, while a
+single persistent SQLite database is easy to audit and back up. The confirmed
+HostGator fallback can report success while dropping mail, so stopping safely
+is more important than finishing a batch through an untrusted path.
+
+## 2026-07-31 — Pop Culture Bee ties use total server-measured correct-answer time
+
+Rank by score descending, then the sum of `elapsed_ms` for scored-correct
+answers ascending. Each elapsed value is measured from server `served_at` to
+server finalization and capped at the visible question window, so the hidden
+transport grace does not add tiebreak time. Email is only a final deterministic
+ordering if both score and correct-answer time are identical.
+
+Reason: this implements the recorded design requirement and makes the top-N
+cut reproducible without trusting a player's clock.
