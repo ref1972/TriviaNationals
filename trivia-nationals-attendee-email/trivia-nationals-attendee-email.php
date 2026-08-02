@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Attendee Email
  * Description: Admin dashboard for emailing attendees who have purchased selected products (tickets, gift cards, etc.) or hold an allocated ticket.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -219,17 +219,25 @@ final class TN_Attendee_Email {
         return $html;
     }
 
-    private static function send_to(string $email, string $subject, string $body_html, string $first_name): bool {
+    /** @return array{ok:bool,error:string,quota_exhausted:bool} */
+    private static function send_to(string $email, string $subject, string $body_html, string $first_name): array {
         $subject = str_replace('{first_name}', $first_name, $subject);
         $html = self::render_email_html($body_html, $first_name);
-        if (function_exists('tn_tde_send_signup_email')) {
-            return (bool) tn_tde_send_signup_email($email, $subject, $html);
+        if (!function_exists('tn_tde_workspace_relay_request')) {
+            return ['ok' => false, 'error' => 'Workspace relay integration is unavailable.', 'quota_exhausted' => false];
         }
-        return wp_mail($email, $subject, $html, [
-            'From: Trivia Nationals <info@trivianationals.org>',
-            'Reply-To: Trivia Nationals <info@trivianationals.org>',
-            'Content-Type: text/html; charset=UTF-8',
+        $result = tn_tde_workspace_relay_request([
+            'action' => 'send_email',
+            'to' => $email,
+            'subject' => $subject,
+            'html_body' => $html,
         ]);
+        $error = empty($result['error']) ? '' : (string) $result['error'];
+        return [
+            'ok' => !empty($result['ok']),
+            'error' => $error,
+            'quota_exhausted' => !empty($result['quota_exhausted']) || stripos($error, 'quota') !== false || stripos($error, 'safety limit') !== false,
+        ];
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -295,12 +303,13 @@ final class TN_Attendee_Email {
         $offset = max(0, absint($batch['next_offset'] ?? 0));
         $slice = array_slice($batch['recipients'], $offset, self::BATCH_SIZE);
         foreach ($slice as $recipient) {
-            $ok = self::send_to($recipient['email'], $batch['subject'], $batch['body'], $recipient['name']);
-            if ($ok) {
-                $batch['sent']++;
-            } else {
-                $batch['failed']++;
+            $result = self::send_to($recipient['email'], $batch['subject'], $batch['body'], $recipient['name']);
+            if (!$result['ok']) {
+                wp_send_json_error([
+                    'message' => ($result['quota_exhausted'] ? 'The Workspace relay sending limit was reached.' : 'The Workspace relay did not accept the next message.') . ' The send paused without advancing that recipient: ' . $result['error'],
+                ]);
             }
+            $batch['sent']++;
             $batch['next_offset']++;
             // Persist after every recipient so a retried request continues instead of resending.
             set_transient($key, $batch, self::BATCH_TTL);
@@ -338,11 +347,11 @@ final class TN_Attendee_Email {
             wp_send_json_error(['message' => 'Your account has no usable email address.']);
         }
         $first_name = trim($user->first_name) !== '' ? trim($user->first_name) : 'there';
-        $ok = self::send_to($user->user_email, '[TEST] ' . $subject, $body, $first_name);
-        if ($ok) {
+        $result = self::send_to($user->user_email, '[TEST] ' . $subject, $body, $first_name);
+        if ($result['ok']) {
             wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . '.']);
         }
-        wp_send_json_error(['message' => 'The test email could not be sent.']);
+        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error']]);
     }
 
     private static function append_log(string $subject, string $targets, int $total, int $sent, int $failed): void {

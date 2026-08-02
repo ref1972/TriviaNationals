@@ -17,3 +17,6 @@
 
 # Tool-specific local settings; shared instructions and commands are tracked.
 /.claude/settings.local.json
+
+# Local Node dependencies for the shared mail relay.
+/workspace-mail-relay/node_modules/

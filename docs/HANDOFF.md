@@ -2,6 +2,29 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — Shared Workspace SMTP gateway implemented in source
+
+- The owner confirmed Trivia Nationals must remain on HostGator. The selected
+  architecture puts only a small isolated mail gateway on the existing
+  DigitalOcean droplet; HostGator WordPress calls it over authenticated HTTPS,
+  and only the droplet IP is permitted to relay through Google Workspace SMTP.
+- Added `workspace-mail-relay/`: localhost-only Node service, app-specific
+  bearer authentication with hashed configured secrets, fixed From/Reply-To,
+  STARTTLS-only Workspace handoff, one recipient per transaction, rolling
+  one-message-per-three-seconds global pacing, rolling hourly/24-hour safety
+  capacity, hashed-recipient SQLite audit, bounded requests, and no fallback.
+  Eight gateway tests pass and npm audit reports zero
+  vulnerabilities.
+- Prepared unreleased source clients: Timed Quiz supports its own client ID;
+  Event Schedule Manager supplies a shared structured WordPress helper;
+  Announcements and Attendee Email pause without advancing the current
+  recipient on every relay failure. The known-unreliable HostGator
+  `wp_mail()` fallback is removed from those source paths.
+- Full architecture/setup/rollout/rollback detail is in
+  `docs/WORKSPACE-SMTP-RELAY.md`. Nothing is deployed, no DNS/Workspace rule or
+  production option changed, no database/recipient state changed, and no email
+  was sent. WooCommerce core order mail is deliberately not included yet.
+
 ## 2026-08-01 — Shared Workspace relay redeployed for Timed Quiz
 
 - The existing `info@trivianationals.org`-owned Web App deployment matching

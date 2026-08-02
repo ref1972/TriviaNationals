@@ -1,0 +1,22 @@
+[Unit]
+Description=Trivia Workshop Workspace mail relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trivia-mail-relay
+Group=trivia-mail-relay
+WorkingDirectory=/var/www/trivia-mail-relay/current
+EnvironmentFile=/etc/trivia-mail-relay.env
+ExecStart=/opt/timed-quiz-node/bin/node src/server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/trivia-mail-relay
+
+[Install]
+WantedBy=multi-user.target

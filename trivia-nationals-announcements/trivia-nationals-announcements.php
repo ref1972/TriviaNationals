@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.4.2
+ * Version: 0.5.0
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -421,16 +421,19 @@ final class TN_Announcements {
     }
 
     /**
-     * Calls the Event Signups Apps Script's send_email action directly —
-     * same endpoint/secret as tn_tde_send_email_via_apps_script() in
-     * trivia-desc-editor.php, but returns the actual error text instead of
-     * collapsing every failure into a plain false. send_to() needs this to
-     * specifically recognize a daily-quota exhaustion so it can pause a
-     * batch instead of blindly burning through the rest of it.
+     * Calls the shared Workspace relay and returns its structured result.
      *
      * @return array{ok:bool,error:string}
      */
     private static function send_via_apps_script(string $to, string $subject, string $html): array {
+        if (function_exists('tn_tde_workspace_relay_request')) {
+            $result = tn_tde_workspace_relay_request(['action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html]);
+            return [
+                'ok' => !empty($result['ok']),
+                'error' => empty($result['error']) ? '' : (string) $result['error'],
+                'quota_exhausted' => !empty($result['quota_exhausted']),
+            ];
+        }
         $endpoint = trim((string) get_option('tn_tde_signup_sheets_endpoint'));
         $secret = trim((string) get_option('tn_tde_signup_sheets_secret'));
         if (!$endpoint || !$secret) {
@@ -439,7 +442,11 @@ final class TN_Announcements {
         $response = wp_remote_post($endpoint, [
             'timeout' => 15,
             'redirection' => 0,
-            'headers' => ['Content-Type' => 'application/json; charset=utf-8'],
+            'headers' => [
+                'Content-Type' => 'application/json; charset=utf-8',
+                'X-Relay-Client' => 'trivia_nationals',
+                'Authorization' => 'Bearer ' . $secret,
+            ],
             'body' => wp_json_encode(['secret' => $secret, 'action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html]),
         ]);
         if (is_wp_error($response)) {
@@ -453,10 +460,10 @@ final class TN_Announcements {
         $body = is_wp_error($response) ? '' : wp_remote_retrieve_body($response);
         $result = json_decode($body, true);
         if ($code >= 200 && $code < 300 && is_array($result) && !empty($result['ok'])) {
-            return ['ok' => true, 'error' => ''];
+            return ['ok' => true, 'error' => '', 'quota_exhausted' => false];
         }
         $error = is_array($result) && !empty($result['error']) ? (string) $result['error'] : ('Unknown error (HTTP ' . $code . ').');
-        return ['ok' => false, 'error' => $error];
+        return ['ok' => false, 'error' => $error, 'quota_exhausted' => !empty($result['quota_exhausted'])];
     }
 
     /**
@@ -476,29 +483,15 @@ final class TN_Announcements {
      * ~100) before it ramps up — separate from the SMTP-level send
      * throttling found earlier in the same investigation.
      *
-     * @return array{ok:bool,via:string,quota_exhausted:bool} via is 'apps_script' or 'wp_mail_fallback'
+     * @return array{ok:bool,via:string,quota_exhausted:bool,error:string}
      */
     private static function send_to(string $email, string $subject, string $html): array {
         $relay = self::send_via_apps_script($email, $subject, $html);
         if ($relay['ok']) {
-            return ['ok' => true, 'via' => 'apps_script', 'quota_exhausted' => false];
+            return ['ok' => true, 'via' => 'workspace_relay', 'quota_exhausted' => false, 'error' => ''];
         }
-        $quota_exhausted = stripos($relay['error'], 'too many times') !== false || stripos($relay['error'], 'quota') !== false;
-        if ($quota_exhausted) {
-            // Every remaining recipient would fail the exact same way right
-            // now, so don't spend this one on the unreliable wp_mail()
-            // fallback -- leave them untouched (not sent, not failed) so a
-            // resumed batch retries them once the quota resets, instead of
-            // gambling their delivery on a fallback we already know we
-            // don't trust.
-            return ['ok' => false, 'via' => 'apps_script', 'quota_exhausted' => true];
-        }
-        $ok = wp_mail($email, $subject, $html, [
-            'From: Trivia Nationals <info@trivianationals.org>',
-            'Reply-To: Trivia Nationals <info@trivianationals.org>',
-            'Content-Type: text/html; charset=UTF-8',
-        ]);
-        return ['ok' => (bool) $ok, 'via' => 'wp_mail_fallback', 'quota_exhausted' => false];
+        $quota_exhausted = !empty($relay['quota_exhausted']) || stripos($relay['error'], 'too many times') !== false || stripos($relay['error'], 'quota') !== false || stripos($relay['error'], 'safety limit') !== false;
+        return ['ok' => false, 'via' => 'workspace_relay', 'quota_exhausted' => $quota_exhausted, 'error' => $relay['error']];
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -646,7 +639,13 @@ final class TN_Announcements {
                 // them once the quota resets (typically around midnight
                 // Pacific Time), rather than skipping them as "done."
                 wp_send_json_error([
-                    'message' => 'The Apps Script relay\'s daily sending quota was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. It typically resets around midnight Pacific Time — use "Resume interrupted send" after that to continue.',
+                    'message' => 'The Workspace relay sending limit was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. Use "Resume interrupted send" only after capacity is available.',
+                ]);
+            }
+
+            if (!$result['ok']) {
+                wp_send_json_error([
+                    'message' => 'The Workspace relay did not accept the next message, so the send paused without advancing that recipient: ' . $result['error'],
                 ]);
             }
 
@@ -654,12 +653,6 @@ final class TN_Announcements {
                 $batch['sent']++;
             } else {
                 $batch['failed']++;
-            }
-            if ($result['via'] === 'wp_mail_fallback') {
-                // Fell through to the unreliable host mailer -- reported as
-                // "sent" if wp_mail() returned true, but that's not proof it
-                // actually arrived (see send_to()'s docblock).
-                $batch['fallback_emails'][] = $recipient['email'];
             }
             $batch['next_offset']++;
             // Persist after every recipient so a retried request continues instead of resending.
@@ -704,13 +697,12 @@ final class TN_Announcements {
         }
         $result = self::send_to($user->user_email, '[TEST] ' . self::digest_subject($published_ids), self::assemble_digest_html($published_ids));
         if ($result['ok']) {
-            $note = $result['via'] === 'wp_mail_fallback' ? ' (via the fallback mailer, not the usual relay — worth confirming it actually arrived)' : '';
-            wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . $note . '.']);
+            wp_send_json_success(['message' => 'Test email accepted by the Workspace relay for ' . $user->user_email . '.']);
         }
         if (!empty($result['quota_exhausted'])) {
-            wp_send_json_error(['message' => 'The Apps Script relay\'s daily sending quota was reached, so the test could not be sent. It typically resets around midnight Pacific Time.']);
+            wp_send_json_error(['message' => 'The Workspace relay sending limit was reached, so the test could not be sent.']);
         }
-        wp_send_json_error(['message' => 'The test email could not be sent.']);
+        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error']]);
     }
 
     // ─── Sent tracking ───────────────────────────────────────────────────────

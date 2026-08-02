@@ -22,9 +22,10 @@ with the `manage_woocommerce` capability.
 
 - Only paid, non-cancelled, non-refunded orders are eligible.
 - Recipient addresses are deduplicated case-insensitively across all sources.
-- Emails use `tn_tde_send_signup_email()` when available and fall back to
-  branded `wp_mail()`.
+- Emails require the shared authenticated Workspace relay. They never fall
+  back to HostGator `wp_mail()` after a relay failure.
 - The server owns the batch offset and saves progress after every recipient.
+- A relay failure pauses without advancing the current recipient.
 - Interrupted browser sessions can resume while the one-hour batch transient
   remains available.
 - Recent completed sends are logged, capped at 20 entries.

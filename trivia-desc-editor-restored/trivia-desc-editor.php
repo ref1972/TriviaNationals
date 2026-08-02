@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 3.9
+ * Version: 4.0
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -4238,17 +4238,24 @@ function tn_tde_handle_bulk_event_signup() {
 	exit;
 }
 
-function tn_tde_send_email_via_apps_script( $to, $subject, $html ) {
+function tn_tde_workspace_relay_request( $payload ) {
 	$endpoint = trim( (string) get_option( 'tn_tde_signup_sheets_endpoint' ) );
 	$secret = trim( (string) get_option( 'tn_tde_signup_sheets_secret' ) );
-	if ( ! $endpoint || ! $secret ) return false;
+	if ( ! $endpoint || ! $secret ) return [ 'ok' => false, 'error' => 'Workspace relay endpoint/secret not configured.' ];
 	$response = wp_remote_post( $endpoint, [
 		'timeout' => 15,
 		'redirection' => 0,
-		'headers' => [ 'Content-Type' => 'application/json; charset=utf-8' ],
-		'body' => wp_json_encode( [ 'secret' => $secret, 'action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html ] ),
+		'headers' => [
+			'Content-Type' => 'application/json; charset=utf-8',
+			'X-Relay-Client' => 'trivia_nationals',
+			'Authorization' => 'Bearer ' . $secret,
+		],
+		// Keep the body secret temporarily for backward compatibility with the
+		// existing Apps Script endpoint. The droplet relay authenticates the
+		// headers and ignores this field; remove it after migration is complete.
+		'body' => wp_json_encode( array_merge( [ 'secret' => $secret ], $payload ) ),
 	] );
-	if ( is_wp_error( $response ) ) return false;
+	if ( is_wp_error( $response ) ) return [ 'ok' => false, 'error' => $response->get_error_message() ];
 	$code = wp_remote_retrieve_response_code( $response );
 	if ( $code >= 300 && $code < 400 && wp_remote_retrieve_header( $response, 'location' ) ) {
 		$response = wp_remote_get( wp_remote_retrieve_header( $response, 'location' ), [ 'timeout' => 15, 'redirection' => 5 ] );
@@ -4256,17 +4263,23 @@ function tn_tde_send_email_via_apps_script( $to, $subject, $html ) {
 	}
 	$body = is_wp_error( $response ) ? '' : wp_remote_retrieve_body( $response );
 	$result = json_decode( $body, true );
-	return $code >= 200 && $code < 300 && is_array( $result ) && ! empty( $result['ok'] );
+	if ( ! is_array( $result ) ) return [ 'ok' => false, 'error' => 'Workspace relay returned an unreadable response (HTTP ' . $code . ').' ];
+	if ( $code < 200 || $code >= 300 || empty( $result['ok'] ) ) {
+		$result['ok'] = false;
+		if ( empty( $result['error'] ) ) $result['error'] = 'Workspace relay failed (HTTP ' . $code . ').';
+	}
+	return $result;
 }
 
-// Host PHP mail() delivery is unreliable (HostGator drops it); prefer the Apps Script Gmail relay.
+function tn_tde_send_email_via_apps_script( $to, $subject, $html ) {
+	$result = tn_tde_workspace_relay_request( [ 'action' => 'send_email', 'to' => $to, 'subject' => $subject, 'html_body' => $html ] );
+	return ! empty( $result['ok'] );
+}
+
+// Host PHP mail() delivery is unreliable (HostGator drops it). Never fall back
+// after a Workspace relay failure because false success would lose mail.
 function tn_tde_send_signup_email( $to, $subject, $html ) {
-	if ( tn_tde_send_email_via_apps_script( $to, $subject, $html ) ) return true;
-	return wp_mail( $to, $subject, $html, [
-		'From: Trivia Nationals <info@trivianationals.org>',
-		'Reply-To: Trivia Nationals <info@trivianationals.org>',
-		'Content-Type: text/html; charset=UTF-8',
-	] );
+	return tn_tde_send_email_via_apps_script( $to, $subject, $html );
 }
 
 function tn_tde_handle_email_signup_summary() {

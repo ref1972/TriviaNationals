@@ -37,6 +37,12 @@ Last human review: 2026-07-29.
 ## Live and verified
 
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.
+- A shared Workspace SMTP gateway has been implemented in source under
+  `workspace-mail-relay/` but is not deployed or configured. WordPress remains
+  on HostGator; only the isolated gateway would run on the existing droplet.
+  It uses app-specific bearer credentials, a fixed server-side sender,
+  single-recipient SMTP transactions, hashed-recipient audit records, a rolling
+  safety ceiling, and no fallback. See `docs/WORKSPACE-SMTP-RELAY.md`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.
 - My Tickets v0.6.0 provides email magic-link retrieval, printable QR tickets,
@@ -177,6 +183,12 @@ Last human review: 2026-07-29.
   path for other mail such as WooCommerce order emails) still goes through
   HostGator's local `mail()`, which silently drops messages. Not yet
   migrated to send via Workspace SMTP directly; see docs/HANDOFF.md.
+- Unreleased WordPress source removes the unreliable `wp_mail()` fallback from
+  Event Schedule Manager, Announcements, and Attendee Email bulk paths and
+  prepares them for the shared droplet gateway. Production remains on the old
+  plugin versions and Apps Script until the staged rollout is explicitly
+  performed. WooCommerce core order mail is intentionally outside this first
+  migration.
 - Two stray Apps Script Web App deployments from the Workspace migration's
   troubleshooting (owned by the original personal-Gmail-authorized project)
   are still live but unused. Harmless; a cleanup candidate.
