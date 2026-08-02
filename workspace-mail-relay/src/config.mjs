@@ -15,6 +15,7 @@ function integer(name, fallback, minimum, maximum) {
 export function loadConfig() {
   const config = {
     port: integer("PORT", 8082, 1, 65535),
+    releaseId: process.env.RELEASE_ID?.trim() || "development",
     databasePath: required("DATABASE_PATH"),
     googleOauthClientFile: required("GOOGLE_OAUTH_CLIENT_FILE"),
     googleOauthTokenFile: required("GOOGLE_OAUTH_TOKEN_FILE"),

@@ -82,7 +82,7 @@ export function createServer({ config, store, mailer }) {
 
   return http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/health") {
-      return json(res, 200, { ok: true, service: "trivia-workshop-mail-relay" });
+      return json(res, 200, { ok: true, service: "trivia-workshop-mail-relay", release: config.releaseId ?? "development" });
     }
     if (req.method !== "POST" || req.url !== "/v1/mail") return json(res, 404, { ok: false, error: "Not found" });
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Trivia mail relay audit database
+
+[Service]
+Type=oneshot
+User=root
+Environment=DATABASE_PATH=/var/lib/trivia-mail-relay/audit.sqlite
+Environment=BACKUP_DIRECTORY=/var/backups/trivia-mail-relay
+WorkingDirectory=/var/www/trivia-mail-relay/current
+ExecStart=/usr/bin/bash scripts/backup-audit.sh
