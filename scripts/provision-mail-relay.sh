@@ -31,7 +31,7 @@ install -d -o root -g root -m 0755 "$release_dir"
 tar -xzf "$remote_archive" -C "$release_dir" --strip-components=1
 rm -f "$remote_archive"
 cd "$release_dir"
-npm ci --omit=dev
+/opt/timed-quiz-node/bin/npm ci --omit=dev
 
 chown root:trivia-mail-relay /etc/trivia-mail-relay-oauth-client.json /etc/trivia-mail-relay-oauth-token.json
 chmod 0640 /etc/trivia-mail-relay-oauth-client.json /etc/trivia-mail-relay-oauth-token.json
@@ -75,7 +75,14 @@ systemctl restart trivia-mail-relay.service
 nginx -t
 systemctl reload nginx
 
-curl -fsS http://127.0.0.1:8082/health
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsS http://127.0.0.1:8082/health; then break; fi
+  if [ "$attempt" = 10 ]; then
+    systemctl status trivia-mail-relay.service --no-pager -l
+    exit 1
+  fi
+  sleep 1
+done
 timed_secret="$(cat /etc/trivia-mail-relay-timed-quiz.secret)"
 curl -fsS -X POST http://127.0.0.1:8082/v1/mail \
   -H 'Content-Type: application/json' \
