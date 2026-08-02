@@ -85,12 +85,16 @@ are in `docs/WORKSPACE-SMTP-RELAY.md`. Trivia Nationals remains on HostGator.
 Only the gateway runs as an isolated service on the existing droplet.
 Gateway rc2 is deployed at `https://mail.triviaworkshop.com`; its isolated
 service, TLS, OAuth readiness, authentication rejection, rolling capacity,
-zero-send audit state, daily backup timer, Timed Quiz health, and CASS health
-are verified. Neither caller endpoint is switched yet. The Internal Gmail API
-OAuth client is authorized as `info@` for only `gmail.send`, and the two caller
-secrets exist outside Git. Do not switch WordPress until an authorized test
-message has been verified. This migration does not yet cover WooCommerce core
-order emails.
+daily backup timer, Timed Quiz health, and CASS health are verified. Timed Quiz
+rc23 is switched to its app-specific gateway credential. On 2026-08-01, Gmail
+API accepted exactly one owner-authorized test invitation (HTTP 200 and a
+provider message ID), and the owner confirmed inbox delivery. Personalized-link
+and header verification remain pending. WordPress is not switched and still
+uses Apps Script. The Internal Gmail API
+OAuth client is authorized as `info@` for only `gmail.send`, and caller secrets
+exist outside Git. Do not switch WordPress until the personalized link and
+headers are verified. This migration does not yet cover WooCommerce core order
+emails.
 
 ## Rollback
 
@@ -101,7 +105,7 @@ order emails.
 - Scores placeholder: restore the prior tracked `index.html` from Git and upload
   that single file.
 
-## Pop Culture Bee quiz (not deployed)
+## Pop Culture Bee quiz
 
 - Source and detailed deployment record moved to
   [ref1972/timedquiz](https://github.com/ref1972/timedquiz). Local checkout:
@@ -124,5 +128,6 @@ order emails.
   `google-apps-script/event-signups/Code.gs`, then configuring
   `EMAIL_RELAY_URL`/`EMAIL_RELAY_SECRET`. The quiz sender intentionally has no
   HostGator/`wp_mail()` fallback.
-- No quiz DNS record, TLS certificate, application directories, service,
-  production secrets, or database has been configured yet.
+- Production rc23 is deployed at `https://bee.triviaworkshop.com` with DNS,
+  TLS, an isolated service/database/backups, and production secrets outside
+  Git. Detailed operations live in the Timed Quiz repository.

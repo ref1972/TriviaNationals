@@ -2,6 +2,23 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — First Gmail API gateway message accepted
+
+- With explicit owner authorization, imported `friedewald@gmail.com` as a
+  Timed Quiz test player and attempted exactly one personalized test
+  invitation through the new gateway. No retry or fallback occurred.
+- Independent audits agree: gateway totals are one attempt/one acceptance;
+  the row belongs to `timed_quiz`, Gmail API returned HTTP 200 and a provider
+  message ID, and Timed Quiz logged `invitation_test_email` success for player
+  8. Gateway capacity reported 999 remaining under the configured 24-hour
+  safety ceiling.
+- Both services remained active. Fresh post-send backups are
+  `audit-20260802T020009Z.sqlite.gz` and
+  `quiz-20260802T020009Z.sqlite.gz`.
+- The owner confirmed inbox delivery. Personalized-link operation and header /
+  Workspace Email Log Search inspection remain pending before any WordPress
+  cutover.
+
 ## 2026-08-01 — Timed Quiz cut over to gateway, no mail sent
 
 - Timed Quiz rc23 is deployed after verified backup

@@ -18,7 +18,7 @@ It is also the durable project memory shared by Claude and Codex.
 | Event Signups Apps Script | `google-apps-script/event-signups/Code.gs` | Google-side integration for event signup data |
 | Scores placeholder | `scores-site/index.html` | Static coming-soon page for the future scoring dashboard |
 | Timed Quiz / Pop Culture Bee | [ref1972/timedquiz](https://github.com/ref1972/timedquiz) | Standalone project extracted from this repository; TriviaNationals retains only the shared Workspace Apps Script integration |
-| Workspace mail relay | `workspace-mail-relay/` | Planned authenticated HTTPS gateway on the existing droplet, forwarding approved single-recipient mail through the Gmail API for Timed Quiz and selected WordPress bulk-mail tools; source only, not deployed |
+| Workspace mail relay | `workspace-mail-relay/` | Deployed authenticated HTTPS gateway on the existing droplet, forwarding approved single-recipient mail through the Gmail API for Timed Quiz and, after staged rollout, selected WordPress bulk-mail tools |
 
 ## Key public/admin surfaces
 

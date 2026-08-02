@@ -43,9 +43,11 @@ Last human review: 2026-07-29.
   It uses app-specific bearer credentials, a fixed server-side sender,
   single-recipient API requests, hashed-recipient audit records, a rolling
   safety ceiling, and no fallback. OAuth readiness succeeds with exactly
-  `gmail.send`; the audit contains zero attempts/acceptances, so no mail has
-  been sent. Timed Quiz rc23 now points to it and its no-send capacity check
-  succeeds; WordPress still uses Apps Script. See
+  `gmail.send`. On 2026-08-01, one owner-authorized Timed Quiz test invitation
+  was accepted through the gateway by Gmail API (HTTP 200 with a provider
+  message ID), and the owner confirmed inbox delivery. Personalized-link and
+  header verification remain pending. Timed Quiz rc23 points to it; WordPress
+  still uses Apps Script. See
   `docs/WORKSPACE-SMTP-RELAY.md`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.
