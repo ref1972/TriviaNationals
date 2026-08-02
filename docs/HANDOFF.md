@@ -2,6 +2,17 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-02 — Timed Quiz completion mail verified on shared gateway
+
+- Shared gateway audit now contains eight `timed_quiz` attempts and eight
+  acceptances. Six correspond to naturally triggered tester-completion
+  notifications; Timed Quiz records six successes/timestamps and zero errors.
+- Timed Quiz rc25 is live with the tester-feedback player layout, split admin
+  screens, reviewed-ruling history, and shared player/preview prompt fitting.
+  Full implementation/deployment detail remains in `ref1972/timedquiz`.
+- WordPress is still on Apps Script. This evidence strengthens the gateway
+  transport validation but does not itself authorize the WordPress cutover.
+
 ## 2026-08-01 — First Gmail API gateway message accepted
 
 - With explicit owner authorization, imported `friedewald@gmail.com` as a
