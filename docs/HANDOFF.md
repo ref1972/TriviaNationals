@@ -2,6 +2,18 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — Timed Quiz cut over to gateway, no mail sent
+
+- Timed Quiz rc23 is deployed after verified backup
+  `quiz-20260802T014933Z.sqlite.gz` and now points to the gateway with its own
+  `timed_quiz` client credential.
+- Verified credential match, no-send capacity (zero accepted, 1,000 remaining),
+  Timed Quiz rc23 public health, and CASS HTTP 200. Gateway audit remains zero.
+- WordPress still uses Apps Script. Before changing it, obtain explicit owner
+  authorization for one exact Timed Quiz test invitation and verify inbox,
+  personalized identity, headers, gateway audit, and Workspace Email Log
+  Search.
+
 ## 2026-08-01 — Shared Gmail API gateway rc2 deployed, no callers switched
 
 - DNS `mail.triviaworkshop.com` resolves to the existing droplet. Gateway rc2
