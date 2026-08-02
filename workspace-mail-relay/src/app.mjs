@@ -48,14 +48,15 @@ async function readJson(req) {
   }
 }
 
-function smtpDetails(error) {
+function deliveryDetails(error) {
   const responseCode = Number.isInteger(error?.responseCode) ? error.responseCode : null;
   const response = typeof error?.response === "string" ? error.response : "";
   const enhanced = response.match(/\b([245]\.\d\.\d)\b/)?.[1] || null;
   return {
-    smtpCode: responseCode,
+    providerCode: responseCode,
     enhancedStatus: enhanced,
-    errorClass: responseCode ? `smtp_${Math.floor(responseCode / 100)}xx` : "transport_error",
+    errorClass: responseCode ? `provider_${responseCode}` : "transport_error",
+    quotaExhausted: responseCode === 429 || /resource_exhausted|rate.?limit|quota/i.test(response),
   };
 }
 
@@ -134,8 +135,8 @@ export function createServer({ config, store, mailer }) {
           disableFileAccess: true,
           disableUrlAccess: true,
         });
-          const smtpCode = Number(String(info.response || "").match(/^([0-9]{3})/)?.[1] || 250);
-          store.record({ clientId, recipientHash: digest(to), accepted: true, smtpCode, messageId: info.messageId || null });
+          const providerCode = Number(String(info.response || "").match(/^([0-9]{3})/)?.[1] || 200);
+          store.record({ clientId, recipientHash: digest(to), accepted: true, providerCode, messageId: info.messageId || null });
           return json(res, 200, {
             ok: true,
             action: "send_email",
@@ -144,13 +145,14 @@ export function createServer({ config, store, mailer }) {
             message_id: info.messageId || null,
           });
         } catch (error) {
-          const details = smtpDetails(error);
+          const details = deliveryDetails(error);
           store.record({ clientId, recipientHash: digest(to), accepted: false, ...details });
           return json(res, 502, {
             ok: false,
-            error: "Workspace SMTP relay did not accept the message",
-            retryable: !details.smtpCode || details.smtpCode < 500,
-            smtp_code: details.smtpCode,
+            error: "Workspace Gmail API did not accept the message",
+            retryable: !details.providerCode || details.providerCode === 429 || details.providerCode >= 500,
+            quota_exhausted: details.quotaExhausted,
+            provider_code: details.providerCode,
             enhanced_status: details.enhancedStatus,
             remaining: Math.max(0, config.dailySafetyLimit - accepted),
           });

@@ -16,21 +16,20 @@ export function loadConfig() {
   const config = {
     port: integer("PORT", 8082, 1, 65535),
     databasePath: required("DATABASE_PATH"),
-    smtpHost: process.env.SMTP_HOST?.trim() || "smtp-relay.gmail.com",
-    smtpPort: integer("SMTP_PORT", 587, 1, 65535),
-    smtpHeloName: required("SMTP_HELO_NAME"),
-    fromEmail: required("SMTP_FROM_EMAIL").toLowerCase(),
-    fromName: required("SMTP_FROM_NAME"),
-    replyTo: required("SMTP_REPLY_TO").toLowerCase(),
+    googleServiceAccountFile: required("GOOGLE_SERVICE_ACCOUNT_FILE"),
+    gmailUser: required("GMAIL_USER").toLowerCase(),
+    fromEmail: required("MAIL_FROM_EMAIL").toLowerCase(),
+    fromName: required("MAIL_FROM_NAME"),
+    replyTo: required("MAIL_REPLY_TO").toLowerCase(),
     dailySafetyLimit: integer("DAILY_SAFETY_LIMIT", 1000, 1, 10000),
     hourlySafetyLimit: integer("HOURLY_SAFETY_LIMIT", 300, 1, 5000),
     minSendIntervalMs: integer("MIN_SEND_INTERVAL_MS", 3000, 250, 60000),
     clientHashes: parseClients(required("RELAY_CLIENTS")),
   };
-  if (!/^[a-z0-9.-]+$/i.test(config.smtpHeloName)) throw new Error("SMTP_HELO_NAME must be a hostname");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.fromEmail)) throw new Error("SMTP_FROM_EMAIL must be an email address");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.replyTo)) throw new Error("SMTP_REPLY_TO must be an email address");
-  if (/[\r\n]/.test(config.fromName)) throw new Error("SMTP_FROM_NAME must be one line");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.gmailUser)) throw new Error("GMAIL_USER must be an email address");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.fromEmail)) throw new Error("MAIL_FROM_EMAIL must be an email address");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.replyTo)) throw new Error("MAIL_REPLY_TO must be an email address");
+  if (/[\r\n]/.test(config.fromName)) throw new Error("MAIL_FROM_NAME must be one line");
   return config;
 }
 

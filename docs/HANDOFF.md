@@ -2,18 +2,21 @@
 
 Last updated: 2026-08-01.
 
-## 2026-08-01 — Shared Workspace SMTP gateway implemented in source
+## 2026-08-01 — Shared Workspace Gmail API gateway implemented in source
 
 - The owner confirmed Trivia Nationals must remain on HostGator. The selected
   architecture puts only a small isolated mail gateway on the existing
-  DigitalOcean droplet; HostGator WordPress calls it over authenticated HTTPS,
-  and only the droplet IP is permitted to relay through Google Workspace SMTP.
+  DigitalOcean droplet; HostGator WordPress calls it over authenticated HTTPS.
+- Read-only verification found DigitalOcean blocks outbound SMTP ports 25, 465,
+  and 587 on all Droplets. The gateway transport was therefore corrected to
+  Google Workspace's Gmail API over HTTPS, using a service account delegated
+  only the `gmail.send` scope to act as `info@trivianationals.org`.
 - Added `workspace-mail-relay/`: localhost-only Node service, app-specific
   bearer authentication with hashed configured secrets, fixed From/Reply-To,
-  STARTTLS-only Workspace handoff, one recipient per transaction, rolling
+  HTTPS Gmail API handoff, one recipient per request, rolling
   one-message-per-three-seconds global pacing, rolling hourly/24-hour safety
   capacity, hashed-recipient SQLite audit, bounded requests, and no fallback.
-  Eight gateway tests pass and npm audit reports zero
+  eleven gateway/transport tests pass and npm audit reports zero
   vulnerabilities.
 - Prepared unreleased source clients: Timed Quiz supports its own client ID;
   Event Schedule Manager supplies a shared structured WordPress helper;

@@ -1,23 +1,11 @@
-import nodemailer from "nodemailer";
 import { createServer } from "./app.mjs";
 import { loadConfig } from "./config.mjs";
+import { createGmailApiMailer } from "./gmail-api.mjs";
 import { openStore } from "./store.mjs";
 
 const config = loadConfig();
 const store = openStore(config.databasePath);
-const mailer = nodemailer.createTransport({
-  host: config.smtpHost,
-  port: config.smtpPort,
-  secure: false,
-  requireTLS: true,
-  name: config.smtpHeloName,
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 30_000,
-  disableFileAccess: true,
-  disableUrlAccess: true,
-  tls: { minVersion: "TLSv1.2", servername: config.smtpHost },
-});
+const mailer = createGmailApiMailer(config);
 const server = createServer({ config, store, mailer });
 
 server.listen(config.port, "127.0.0.1", () => {

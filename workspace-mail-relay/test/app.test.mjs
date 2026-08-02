@@ -69,7 +69,7 @@ test("rejects unauthenticated requests", async (t) => {
   assert.equal(sent.length, 0);
 });
 
-test("reports local rolling capacity without contacting SMTP", async (t) => {
+test("reports local rolling capacity without contacting Gmail", async (t) => {
   const { server, sent } = fixture({ accepted: 12, limit: 100 });
   t.after(() => server.close());
   const url = await listen(server);
@@ -109,7 +109,7 @@ test("serializes concurrent callers and enforces the global send interval", asyn
   assert.ok(Date.now() - started >= 25);
 });
 
-test("stops at the local safety limit before SMTP", async (t) => {
+test("stops at the local safety limit before Gmail", async (t) => {
   const { server, sent, records } = fixture({ accepted: 100, limit: 100 });
   t.after(() => server.close());
   const url = await listen(server);
@@ -120,7 +120,7 @@ test("stops at the local safety limit before SMTP", async (t) => {
   assert.equal(records.length, 0);
 });
 
-test("stops at the rolling hourly safety limit before SMTP", async (t) => {
+test("stops at the rolling hourly safety limit before Gmail", async (t) => {
   const { server, sent, records } = fixture({ accepted: 25, acceptedHour: 10, hourlyLimit: 10 });
   t.after(() => server.close());
   const url = await listen(server);
@@ -131,7 +131,7 @@ test("stops at the rolling hourly safety limit before SMTP", async (t) => {
   assert.equal(records.length, 0);
 });
 
-test("rejects header injection before SMTP", async (t) => {
+test("rejects header injection before Gmail", async (t) => {
   const { server, sent, records } = fixture();
   t.after(() => server.close());
   const url = await listen(server);
@@ -141,17 +141,17 @@ test("rejects header injection before SMTP", async (t) => {
   assert.equal(records.length, 0);
 });
 
-test("SMTP rejection is sanitized, audited, and not accepted", async (t) => {
-  const error = Object.assign(new Error("550 5.7.1 private provider detail"), { responseCode: 550, response: "550 5.7.1 rejected" });
+test("Gmail API rejection is sanitized, audited, and not accepted", async (t) => {
+  const error = Object.assign(new Error("private provider detail"), { responseCode: 403, response: "PERMISSION_DENIED" });
   const { server, records } = fixture({ sendError: error });
   t.after(() => server.close());
   const url = await listen(server);
   const response = await post(url, { action: "send_email", to: "player@example.com", subject: "Invitation", plain_body: "Hello" });
   assert.equal(response.status, 502);
   const body = await response.json();
-  assert.equal(body.error, "Workspace SMTP relay did not accept the message");
-  assert.equal(body.smtp_code, 550);
-  assert.equal(body.enhanced_status, "5.7.1");
+  assert.equal(body.error, "Workspace Gmail API did not accept the message");
+  assert.equal(body.provider_code, 403);
+  assert.equal(body.enhanced_status, null);
   assert.equal(body.retryable, false);
   assert.equal(records[0].accepted, false);
 });

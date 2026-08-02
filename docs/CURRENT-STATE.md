@@ -37,11 +37,11 @@ Last human review: 2026-07-29.
 ## Live and verified
 
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.
-- A shared Workspace SMTP gateway has been implemented in source under
+- A shared Workspace Gmail API gateway has been implemented in source under
   `workspace-mail-relay/` but is not deployed or configured. WordPress remains
   on HostGator; only the isolated gateway would run on the existing droplet.
   It uses app-specific bearer credentials, a fixed server-side sender,
-  single-recipient SMTP transactions, hashed-recipient audit records, a rolling
+  single-recipient API requests, hashed-recipient audit records, a rolling
   safety ceiling, and no fallback. See `docs/WORKSPACE-SMTP-RELAY.md`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.

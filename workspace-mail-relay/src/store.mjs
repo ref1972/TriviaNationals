@@ -10,7 +10,7 @@ export function openStore(path) {
       recipient_hash TEXT NOT NULL,
       attempted_at TEXT NOT NULL DEFAULT (datetime('now')),
       accepted INTEGER NOT NULL CHECK (accepted IN (0, 1)),
-      smtp_code INTEGER,
+      provider_code INTEGER,
       enhanced_status TEXT,
       provider_message_id TEXT,
       error_class TEXT
@@ -38,7 +38,7 @@ export function openStore(path) {
   `);
   const insertStatement = db.prepare(`
     INSERT INTO delivery_audit
-      (client_id, recipient_hash, accepted, smtp_code, enhanced_status,
+      (client_id, recipient_hash, accepted, provider_code, enhanced_status,
        provider_message_id, error_class)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
@@ -59,7 +59,7 @@ export function openStore(path) {
         entry.clientId,
         entry.recipientHash,
         entry.accepted ? 1 : 0,
-        entry.smtpCode ?? null,
+        entry.providerCode ?? null,
         entry.enhancedStatus ?? null,
         entry.messageId ?? null,
         entry.errorClass ?? null,
