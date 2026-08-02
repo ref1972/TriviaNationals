@@ -32,11 +32,12 @@ platform-wide SMTP-port block.
   `/var/lib/trivia-mail-relay/audit.sqlite`.
 - Timed Quiz and CASS services, runtimes, ports, data, and processes remain
   separate.
-- A Google Cloud service account uses Workspace domain-wide delegation to act
-  only as `info@trivianationals.org` with only the
-  `https://www.googleapis.com/auth/gmail.send` scope.
-- The service-account key is root-readable production configuration outside
-  Git and is readable by the isolated service user only.
+- `info@trivianationals.org` grants the gateway OAuth access to exactly
+  `https://www.googleapis.com/auth/gmail.send`; no domain-wide delegation,
+  inbox-reading, modify, Drive, or administrator scope is required.
+- The OAuth client and refresh token are production configuration outside Git,
+  readable only by the isolated service user, and revocable from the Workspace
+  account or Google Cloud client.
 
 ## Security and delivery rules
 
@@ -116,7 +117,7 @@ template, failure, volume, and compatibility testing.
 
 1. Add deployment/provisioning automation with backup, health, service, nginx,
    and rollback verification.
-2. Complete the owner-assisted Google Cloud and Workspace delegation setup.
+2. Complete the owner-assisted Google OAuth setup for the `info@` mailbox.
 3. Perform authorized production readiness and test-message checks without
    changing any real-recipient state.
 
@@ -128,16 +129,16 @@ No step below authorizes a real invitation or attendee send.
    IPv4.
 2. In a dedicated Google Cloud project:
    - enable the Gmail API;
-   - create a service account and enable domain-wide delegation;
-   - create one service-account key for this gateway and transfer it directly
-     to its root-readable production path, never through Git.
-3. In Google Workspace Admin → Security → API controls → Domain-wide
-   delegation, authorize the service account's numeric client ID for exactly
-   `https://www.googleapis.com/auth/gmail.send`—no inbox, modify, Drive, or
-   broader mail scope.
+   - configure an Internal Google Auth Platform app;
+   - add only `https://www.googleapis.com/auth/gmail.send`;
+   - create a Desktop OAuth client.
+3. Authorize that client once while signed in as `info@trivianationals.org`.
+   Store the downloaded client and resulting refresh token directly in their
+   root-readable production paths, never in Git. No service-account key or
+   domain-wide delegation is needed.
 4. Codex provisions the isolated service, audit backup, nginx virtual host, and
    TLS certificate without changing any caller endpoint.
-5. Codex verifies unauthenticated requests fail, delegated token readiness
+5. Codex verifies unauthenticated requests fail, OAuth token readiness
    succeeds, the audit is empty, Timed Quiz/CASS remain healthy, and WordPress
    is unchanged.
 6. Generate two independent secrets, store only their hashes at the relay, put
@@ -174,7 +175,8 @@ When deployed, record separately:
 - source commit/tag pushed;
 - DNS and TLS verified;
 - service release and health;
-- Gmail API service-account client ID and delegated scope (never the key);
+- Gmail API OAuth client ID and granted scope (never the client secret or
+  tokens);
 - authorized test recipients and owner-confirmed results without committing
   addresses or links;
 - SPF/DKIM/DMARC and Email Log Search outcome;

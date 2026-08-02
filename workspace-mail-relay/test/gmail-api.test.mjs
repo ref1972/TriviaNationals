@@ -3,17 +3,19 @@ import test from "node:test";
 import { createGmailApiMailer } from "../src/gmail-api.mjs";
 
 const config = {
-  googleServiceAccountFile: "/not/read/in/tests.json",
-  gmailUser: "info@trivianationals.org",
+  googleOauthClientFile: "/not/read/in/tests-client.json",
+  googleOauthTokenFile: "/not/read/in/tests-token.json",
 };
-const credentials = { client_email: "relay@test-project.iam.gserviceaccount.com", private_key: "test-key" };
+const clientFile = { installed: { client_id: "client-id", client_secret: "client-secret" } };
+const tokens = { refresh_token: "refresh-token" };
 
-test("Gmail API mailer verifies delegated credentials without sending", async () => {
+test("Gmail API mailer verifies OAuth credentials without sending", async () => {
   let tokenCalls = 0;
   let fetchCalls = 0;
   const mailer = createGmailApiMailer(config, {
-    credentials,
-    auth: { getAccessToken: async () => { tokenCalls += 1; return { token: "access-token" }; } },
+    clientFile,
+    tokens,
+    auth: { setCredentials() {}, getAccessToken: async () => { tokenCalls += 1; return { token: "access-token" }; } },
     fetch: async () => { fetchCalls += 1; return new Response(); },
   });
   assert.equal(await mailer.verify(), true);
@@ -24,8 +26,9 @@ test("Gmail API mailer verifies delegated credentials without sending", async ()
 test("Gmail API mailer creates a single-recipient RFC message and sends over HTTPS", async () => {
   let request;
   const mailer = createGmailApiMailer(config, {
-    credentials,
-    auth: { getAccessToken: async () => ({ token: "access-token" }) },
+    clientFile,
+    tokens,
+    auth: { setCredentials() {}, getAccessToken: async () => ({ token: "access-token" }) },
     fetch: async (url, init) => {
       request = { url, init };
       return new Response(JSON.stringify({ id: "gmail-message-id" }), { status: 200, headers: { "content-type": "application/json" } });
@@ -43,7 +46,7 @@ test("Gmail API mailer creates a single-recipient RFC message and sends over HTT
     disableUrlAccess: true,
   });
   assert.equal(result.messageId, "gmail-message-id");
-  assert.match(request.url, /gmail\.googleapis\.com\/gmail\/v1\/users\/info%40trivianationals\.org\/messages\/send$/);
+  assert.match(request.url, /gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send$/);
   assert.equal(request.init.headers.authorization, "Bearer access-token");
   const raw = JSON.parse(request.init.body).raw.replace(/-/g, "+").replace(/_/g, "/");
   const message = Buffer.from(raw, "base64").toString("utf8");
@@ -54,8 +57,9 @@ test("Gmail API mailer creates a single-recipient RFC message and sends over HTT
 
 test("Gmail API errors expose only status metadata", async () => {
   const mailer = createGmailApiMailer(config, {
-    credentials,
-    auth: { getAccessToken: async () => ({ token: "access-token" }) },
+    clientFile,
+    tokens,
+    auth: { setCredentials() {}, getAccessToken: async () => ({ token: "access-token" }) },
     fetch: async () => new Response(JSON.stringify({ error: { status: "RESOURCE_EXHAUSTED", message: "private provider detail" } }), { status: 429 }),
   });
   await assert.rejects(

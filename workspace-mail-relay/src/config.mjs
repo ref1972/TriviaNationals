@@ -16,8 +16,8 @@ export function loadConfig() {
   const config = {
     port: integer("PORT", 8082, 1, 65535),
     databasePath: required("DATABASE_PATH"),
-    googleServiceAccountFile: required("GOOGLE_SERVICE_ACCOUNT_FILE"),
-    gmailUser: required("GMAIL_USER").toLowerCase(),
+    googleOauthClientFile: required("GOOGLE_OAUTH_CLIENT_FILE"),
+    googleOauthTokenFile: required("GOOGLE_OAUTH_TOKEN_FILE"),
     fromEmail: required("MAIL_FROM_EMAIL").toLowerCase(),
     fromName: required("MAIL_FROM_NAME"),
     replyTo: required("MAIL_REPLY_TO").toLowerCase(),
@@ -26,7 +26,6 @@ export function loadConfig() {
     minSendIntervalMs: integer("MIN_SEND_INTERVAL_MS", 3000, 250, 60000),
     clientHashes: parseClients(required("RELAY_CLIENTS")),
   };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.gmailUser)) throw new Error("GMAIL_USER must be an email address");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.fromEmail)) throw new Error("MAIL_FROM_EMAIL must be an email address");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.replyTo)) throw new Error("MAIL_REPLY_TO must be an email address");
   if (/[\r\n]/.test(config.fromName)) throw new Error("MAIL_FROM_NAME must be one line");

@@ -1,22 +1,19 @@
 import fs from "node:fs";
 import nodemailer from "nodemailer";
-import { JWT } from "google-auth-library";
-
-const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+import { OAuth2Client } from "google-auth-library";
 
 function base64url(buffer) {
   return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 export function createGmailApiMailer(config, dependencies = {}) {
-  const credentials = dependencies.credentials ?? JSON.parse(fs.readFileSync(config.googleServiceAccountFile, "utf8"));
-  if (!credentials.client_email || !credentials.private_key) throw new Error("Google service-account file is missing required credentials");
-  const auth = dependencies.auth ?? new JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: [GMAIL_SEND_SCOPE],
-    subject: config.gmailUser,
-  });
+  const clientFile = dependencies.clientFile ?? JSON.parse(fs.readFileSync(config.googleOauthClientFile, "utf8"));
+  const client = clientFile.installed ?? clientFile.web;
+  if (!client?.client_id || !client?.client_secret) throw new Error("Google OAuth client file is missing required credentials");
+  const tokens = dependencies.tokens ?? JSON.parse(fs.readFileSync(config.googleOauthTokenFile, "utf8"));
+  if (!tokens.refresh_token) throw new Error("Google OAuth token file is missing its refresh token");
+  const auth = dependencies.auth ?? new OAuth2Client(client.client_id, client.client_secret);
+  auth.setCredentials(tokens);
   const composer = nodemailer.createTransport({
     streamTransport: true,
     buffer: true,
@@ -36,7 +33,7 @@ export function createGmailApiMailer(config, dependencies = {}) {
     },
     async sendMail(message) {
       const composed = await composer.sendMail(message);
-      const response = await (dependencies.fetch ?? fetch)(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(config.gmailUser)}/messages/send`, {
+      const response = await (dependencies.fetch ?? fetch)("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
         method: "POST",
         headers: {
           authorization: `Bearer ${await accessToken()}`,

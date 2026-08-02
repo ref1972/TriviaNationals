@@ -9,8 +9,13 @@ Last updated: 2026-08-01.
   DigitalOcean droplet; HostGator WordPress calls it over authenticated HTTPS.
 - Read-only verification found DigitalOcean blocks outbound SMTP ports 25, 465,
   and 587 on all Droplets. The gateway transport was therefore corrected to
-  Google Workspace's Gmail API over HTTPS, using a service account delegated
-  only the `gmail.send` scope to act as `info@trivianationals.org`.
+  Google Workspace's Gmail API over HTTPS.
+- Secure-by-default organization policy blocked downloadable service-account
+  keys. Rather than weakening it, the owner configured an Internal OAuth app
+  and authorized `info@trivianationals.org` for exactly `gmail.send`. The local
+  token contains a renewable refresh token and exactly that scope; credential
+  values remain outside Git. The now-unneeded domain-wide delegation entry
+  should be removed from Workspace Admin.
 - Added `workspace-mail-relay/`: localhost-only Node service, app-specific
   bearer authentication with hashed configured secrets, fixed From/Reply-To,
   HTTPS Gmail API handoff, one recipient per request, rolling

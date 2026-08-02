@@ -83,8 +83,8 @@ The source-only replacement for Apps Script bulk-mail delivery is under
 `workspace-mail-relay/`; the architecture and staged owner-assisted rollout
 are in `docs/WORKSPACE-SMTP-RELAY.md`. Trivia Nationals remains on HostGator.
 Only the gateway would run as an isolated service on the existing droplet.
-Do not deploy or switch the WordPress endpoint until DNS, TLS, a Gmail API
-service account with only delegated `gmail.send`, two independent caller secrets, and authorized test-message
+Do not deploy or switch the WordPress endpoint until DNS, TLS, an Internal
+Gmail API OAuth client authorized as `info@` for only `gmail.send`, two independent caller secrets, and authorized test-message
 verification are ready. This migration does not yet cover WooCommerce core
 order emails.
 
