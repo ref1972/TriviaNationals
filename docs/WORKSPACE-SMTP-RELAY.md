@@ -1,7 +1,7 @@
 # Shared Google Workspace Gmail API gateway
 
-Status: source implementation in progress; not deployed or configured. No mail
-has been sent through it.
+Status: rc2 deployed and OAuth-ready at `https://mail.triviaworkshop.com`.
+Neither caller is switched and no mail has been sent through it.
 
 ## Architecture
 

@@ -37,12 +37,15 @@ Last human review: 2026-07-29.
 ## Live and verified
 
 - The primary site is WordPress/WooCommerce at `trivianationals.org`.
-- A shared Workspace Gmail API gateway has been implemented in source under
-  `workspace-mail-relay/` but is not deployed or configured. WordPress remains
-  on HostGator; only the isolated gateway would run on the existing droplet.
+- Shared Workspace Gmail API gateway rc2 is deployed at
+  `https://mail.triviaworkshop.com`. WordPress remains
+  on HostGator; only the isolated gateway runs on the existing droplet.
   It uses app-specific bearer credentials, a fixed server-side sender,
   single-recipient API requests, hashed-recipient audit records, a rolling
-  safety ceiling, and no fallback. See `docs/WORKSPACE-SMTP-RELAY.md`.
+  safety ceiling, and no fallback. OAuth readiness succeeds with exactly
+  `gmail.send`; the audit contains zero attempts/acceptances, so no mail has
+  been sent. Neither Timed Quiz nor WordPress points to it yet. See
+  `docs/WORKSPACE-SMTP-RELAY.md`.
 - Event signups accept the renamed **Knock Out Quiz with Steve Perry** title
   while retaining compatibility with the former IQA-prefixed title.
 - My Tickets v0.6.0 provides email magic-link retrieval, printable QR tickets,

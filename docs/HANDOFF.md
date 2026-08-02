@@ -2,6 +2,23 @@
 
 Last updated: 2026-08-01.
 
+## 2026-08-01 — Shared Gmail API gateway rc2 deployed, no callers switched
+
+- DNS `mail.triviaworkshop.com` resolves to the existing droplet. Gateway rc2
+  is deployed as its own Node 24 systemd service on localhost port 8082 with
+  nginx/Let's Encrypt HTTPS, separate data, client credentials, and daily
+  audit backup timer.
+- Verified public health/release, unauthorized request rejection, OAuth token
+  readiness, zero accepted/attempted audit rows, rolling capacity 0/300 hourly
+  and 0/1000 daily, and successful backup
+  `audit-20260802T014748Z.sqlite.gz`. Timed Quiz remains rc22 healthy and CASS
+  remains HTTP 200.
+- No email was sent. Neither Timed Quiz nor WordPress has been pointed at the
+  new gateway; both production callers still use Apps Script. The next safe
+  stage is to deploy/switch Timed Quiz, check capacity without sending, then
+  obtain explicit authorization for one test invitation before WordPress
+  changes.
+
 ## 2026-08-01 — Shared Workspace Gmail API gateway implemented in source
 
 - The owner confirmed Trivia Nationals must remain on HostGator. The selected

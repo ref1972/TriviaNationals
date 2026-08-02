@@ -31,7 +31,7 @@ install -d -o root -g root -m 0755 "$release_dir"
 tar -xzf "$remote_archive" -C "$release_dir" --strip-components=1
 rm -f "$remote_archive"
 cd "$release_dir"
-/opt/timed-quiz-node/bin/npm ci --omit=dev
+PATH=/opt/timed-quiz-node/bin:/usr/bin:/bin /opt/timed-quiz-node/bin/npm ci --omit=dev
 
 chown root:trivia-mail-relay /etc/trivia-mail-relay-oauth-client.json /etc/trivia-mail-relay-oauth-token.json
 chmod 0640 /etc/trivia-mail-relay-oauth-client.json /etc/trivia-mail-relay-oauth-token.json

@@ -77,15 +77,19 @@ infrastructure.
   Manager → Signup Settings** (`tn_tde_signup_sheets_endpoint` /
   `tn_tde_signup_sheets_secret` options).
 
-## Shared Workspace Gmail API gateway (not deployed)
+## Shared Workspace Gmail API gateway
 
-The source-only replacement for Apps Script bulk-mail delivery is under
+The replacement for Apps Script bulk-mail delivery is under
 `workspace-mail-relay/`; the architecture and staged owner-assisted rollout
 are in `docs/WORKSPACE-SMTP-RELAY.md`. Trivia Nationals remains on HostGator.
-Only the gateway would run as an isolated service on the existing droplet.
-Do not deploy or switch the WordPress endpoint until DNS, TLS, an Internal
-Gmail API OAuth client authorized as `info@` for only `gmail.send`, two independent caller secrets, and authorized test-message
-verification are ready. This migration does not yet cover WooCommerce core
+Only the gateway runs as an isolated service on the existing droplet.
+Gateway rc2 is deployed at `https://mail.triviaworkshop.com`; its isolated
+service, TLS, OAuth readiness, authentication rejection, rolling capacity,
+zero-send audit state, daily backup timer, Timed Quiz health, and CASS health
+are verified. Neither caller endpoint is switched yet. The Internal Gmail API
+OAuth client is authorized as `info@` for only `gmail.send`, and the two caller
+secrets exist outside Git. Do not switch WordPress until an authorized test
+message has been verified. This migration does not yet cover WooCommerce core
 order emails.
 
 ## Rollback
