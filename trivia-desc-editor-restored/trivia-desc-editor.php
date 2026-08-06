@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 4.0
+ * Version: 4.1
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -3311,10 +3311,25 @@ function tn_tde_signup_is_waitlist_event( $event ) {
 	return tn_tde_signup_is_ttg_event( $event ) || $normalized_title === 'quiz bowl';
 }
 
-function tn_tde_signup_flight_is_hidden( $event, $flight_key ) {
+// Exact allowlists of the flights still open for signup. Any flight letter not
+// listed here — plus Semi-Finals, Finals, and every other session label — is
+// excluded from newly generated signup options. Events with no entry keep all
+// of their flights. Stored signups are never modified by this.
+function tn_tde_signup_open_flight_keys( $event ) {
 	$title = $event['base_title'] ?? $event['title'] ?? '';
-	if ( ! tn_tde_signup_title_matches( $title, [ '5x5', '5 x 5' ] ) ) return false;
-	return ! in_array( $flight_key, [ 'flight-d', 'flight-e' ], true );
+	if ( tn_tde_signup_title_matches( $title, [ '5x5', '5 x 5' ] ) ) {
+		return [ 'flight-d', 'flight-e' ];
+	}
+	if ( tn_tde_signup_title_matches( $title, [ 'Academic Bee' ] ) ) {
+		return [ 'flight-e', 'flight-h', 'flight-i', 'flight-j' ];
+	}
+	return null;
+}
+
+function tn_tde_signup_flight_is_hidden( $event, $flight_key ) {
+	$open_flights = tn_tde_signup_open_flight_keys( $event );
+	if ( $open_flights === null ) return false;
+	return ! in_array( $flight_key, $open_flights, true );
 }
 
 function tn_tde_signup_ttg_flight_labels() {

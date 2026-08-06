@@ -161,10 +161,20 @@ Last human review: 2026-07-29.
   live again on 2026-07-29 (from the unmerged `agent/quiz-bowl-waitlist`
   branch) and preserved during that day's deploy, but **is still not in
   `main`** — see docs/HANDOFF.md's next steps.
-- **5 x 5 signup availability**: newly generated selectable signup options
-  use an exact allowlist of Flights D and E. Flights A-C, Semi-Finals, Finals,
-  and any other 5 x 5 session labels are excluded. Existing stored signups are
-  not modified. Deployed and live-verified 2026-07-30.
+- **Signup flight availability** is governed by `tn_tde_signup_open_flight_keys()`,
+  an exact per-event allowlist of the flight letters still open. Any letter not
+  listed — plus Semi-Finals, Finals, and every other session label — is excluded
+  from newly generated options; an event with no entry keeps all its flights.
+  Existing stored signups are never modified. Current allowlists:
+  - **5 x 5**: Flights D and E. Deployed and live-verified 2026-07-30.
+  - **Academic Bee**: Flights E, H, I, and J (A-D, F, and G removed as those
+    flights filled). Deployed and live-verified 2026-07-31.
+
+  The allowlist is enforced on both signup surfaces at once, because the
+  `/event-signups/` page and the per-event `/event-info/` form both build their
+  lists from `tn_tde_signup_flight_options_for_event()`, and
+  `tn_tde_signup_option_for_value()` reuses the same list to validate a
+  submission — so a stale open form cannot post a removed flight.
 - The only valid purchased admission product is exactly **Trivia Nationals 2026
   Ticket**, production WooCommerce product ID `18347`.
 - Allocated tickets use the `TN26A-####` number format and participate in ticket

@@ -1,6 +1,6 @@
 # Current handoff
 
-Last updated: 2026-08-01.
+Last updated: 2026-08-05.
 
 ## 2026-08-02 — Timed Quiz completion mail verified on shared gateway
 
@@ -183,6 +183,43 @@ Last updated: 2026-08-01.
 
 ## Recently completed
 
+- 2026-07-31: **Academic Bee signup options restricted to Flights E, H, I,
+  and J**, deployed and live-verified. Flights A-D, F, and G had filled and
+  were removed at the owner's request; Academic Bee had been offering A
+  through J.
+  - The one-off 5 x 5 check was generalized into
+    `tn_tde_signup_open_flight_keys( $event )`, a per-event allowlist returning
+    the open flight keys, or `null` for events that keep every flight.
+    `tn_tde_signup_flight_is_hidden()` is now a thin wrapper over it, so the
+    call site in `tn_tde_signup_flight_options_for_event()` is unchanged and
+    the 5 x 5 rule (D and E) is carried over untouched. Adding or reopening a
+    flight in future is a one-line edit to that allowlist.
+  - **Live-verified on both signup surfaces** after deploy: the
+    `/event-signups/` page's `events` payload lists exactly Flight E, H, I, J
+    for Academic Bee, and `/event-info/academic-bee-flight-a/` renders the same
+    four in its own form. 5 x 5 still shows D and E, and Trivia Spelling Bee,
+    IQA Individual Quiz Championship, Crossword Challenge, and BP Titans are
+    byte-for-byte unchanged.
+  - The allowlist was also unit-checked off-page against every event's real
+    flight set before deploy, including the letter-plus-label mix (Semi-Finals,
+    Finals, and IQA's non-sequential Flights X and Y).
+  - No stored signup records were changed, so anyone already registered in a
+    now-closed Academic Bee flight keeps their spot. **Not verified**: how the
+    "my signups" change/edit flow (line ~5164) presents an existing signup whose
+    flight is no longer selectable — same pre-existing question the 5 x 5
+    restriction raised, still unexercised against a real closed-flight signup.
+  - **Version-numbering caveat.** This change sat uncommitted in the owner's
+    working tree from 2026-07-31 to 2026-08-05 and was version-stamped **4.0**
+    when it was deployed. Meanwhile `26a4b94` (shared Workspace SMTP relay,
+    2026-08-01) independently stamped a *different* plugin build **4.0** in
+    `main`. To break the collision the allowlist is committed here as **v4.1**.
+    Consequently **v4.1 as committed has never been deployed**: it is the first
+    build combining the Academic Bee allowlist with the relay refactor (which
+    routes all plugin mail through `tn_tde_workspace_relay_request()` and drops
+    the `wp_mail` fallback). Production currently runs the allowlist without
+    that refactor. Before any future upload of this plugin, confirm which of
+    the two 4.0 builds is actually live and re-verify mail sending, not just
+    the flight lists.
 - 2026-07-30: **5 x 5 signup options restricted** (Event Schedule Manager
   v3.9). The final owner-confirmed rule is an exact allowlist: only Flights D
   and E are generated as selectable 5 x 5 signup options. Flights A-C,
