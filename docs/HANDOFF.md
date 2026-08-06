@@ -2,6 +2,36 @@
 
 Last updated: 2026-08-05.
 
+## 2026-08-05 — Announcements v0.5.0 deployed; wp_mail fallback fully closed
+
+Deployed `trivia-nationals-announcements` 0.4.2 → **0.5.0**, checksum-verified
+(`8a6ca86e…`). Pre-deploy live file backed up to
+`backups/trivia-nationals-announcements/…20260806-000045.bak`.
+
+- **This closes the last `wp_mail` false-success exposure.** The live 0.4.2
+  carried its own Apps Script path that dropped through to `wp_mail()` on a
+  non-quota failure and reported `via: wp_mail_fallback`. 0.5.0 routes through
+  the shared `tn_tde_workspace_relay_request()` instead and returns the relay's
+  real error. All three mail-sending plugins are now free of the fallback.
+- **Precondition checked before deploying:** 0.5.0 calls
+  `tn_tde_workspace_relay_request()`, which only exists as of Event Schedule
+  Manager v4.1. v4.1 went live earlier the same day, so the dependency was
+  already satisfied. **Deploying 0.5.0 before v4.1 would have broken
+  announcement sending** — the function would not have existed. Keep that
+  ordering in mind if either plugin is ever rolled back.
+- **Behavior change for batch sends:** a failed recipient now *halts* the
+  batch (`wp_send_json_error`, offset not advanced) rather than incrementing a
+  failure count and continuing. No silent partial loss, but one bad address
+  will stall a blast until "Resume interrupted send" is used. The
+  `$batch['failed']` branch is consequently unreachable in normal operation.
+- The `fallback_emails` log plumbing is retained deliberately: nothing
+  populates it anymore, but historical log entries from earlier sends still
+  render their recorded addresses.
+- Post-deploy health checks: homepage and `/event-signups/` both HTTP 200, no
+  PHP error text, and Academic Bee still lists exactly Flights A, E, H, I, J.
+- **Not verified:** no announcement has been sent through 0.5.0. The plugin's
+  own "send test digest to me" would exercise it.
+
 ## 2026-08-05 — Live mail plugin versions diverge from `main`
 
 Checked over FTPS while preparing the post-deploy mail test. Only the Event
@@ -11,15 +41,18 @@ plugins are **older in production than in `main`**:
 | Plugin | Live | In `main` | Note |
 | --- | --- | --- | --- |
 | Event Schedule Manager | 4.1 | 4.1 | in sync, deployed 2026-08-05 |
-| Attendee Email | 0.3.0 | newer | undeployed; live copy delegates to `tn_tde_send_signup_email()` |
-| Announcements | 0.4.2 | newer | undeployed; live copy still has the `wp_mail` fallback |
+| Attendee Email | 0.3.0 | newer | **still undeployed**; live copy delegates to `tn_tde_send_signup_email()` |
+| Announcements | 0.4.2 | newer | resolved later the same day — 0.5.0 deployed, see the entry above |
 
-Neither is broken — the live Attendee Email delegates into the schedule
+Neither was broken — the live Attendee Email delegates into the schedule
 manager's sender and so picks up the v4.1 behavior for free, and the live
-Announcements plugin carries a self-contained Apps Script path that still
-works. But `main` is ahead of production for both, so "the repo matches
-production" is true **only** for the Event Schedule Manager and the roster
-sync. Deploying either of the other two is a separate, unperformed step.
+0.4.2 Announcements plugin carried a self-contained Apps Script path that
+still worked (with its `wp_mail` fallback intact).
+
+**Announcements was subsequently deployed to 0.5.0 on 2026-08-05.** Attendee
+Email remains at 0.3.0 in production while `main` holds a newer copy — that
+one is still an unperformed step, though the live version behaves correctly by
+delegation and has no fallback exposure of its own.
 
 **For the mail test:** use Attendee Email's "Send test email to me" button.
 Live v0.3.0 routes it through `tn_tde_send_signup_email()` → v4.1's
@@ -902,16 +935,16 @@ and cannot be read over FTPS. Confirm in wp-admin that it still points at
     function exists, so it **inherits** the no-fallback behavior from v4.1.
     Its own `wp_mail()` call is now dead code, reachable only if the Event
     Schedule Manager plugin is deactivated.
-  - **Announcements v0.4.2** (live; `main` has a newer, undeployed copy):
-    **still falls back to `wp_mail()`.** It carries its own copy of the relay
-    logic, posts to Apps Script directly with the old payload shape, and on a
-    non-quota failure drops through to `wp_mail()` and reports
-    `via: wp_mail_fallback`. Today's deploy did not change this. Announcement
-    sends remain exposed to the false-success failure mode.
+  - **Announcements v0.5.0** (deployed 2026-08-05, later the same day):
+    fallback removed. It had been live at 0.4.2, which carried its own copy of
+    the relay logic, posted to Apps Script directly with the old payload
+    shape, and on a non-quota failure dropped through to `wp_mail()` reporting
+    `via: wp_mail_fallback`. It now routes through the shared
+    `tn_tde_workspace_relay_request()` and returns the relay's real error.
 
   That failure mode is real: of a 182-recipient send on 2026-07-29 only 106
   reached Gmail; the rest were dropped by HostGator's `wp_mail()` returning
-  `true`. It is closed for signup mail, still open for announcements.
+  `true`. **It is now closed on all three plugins.**
 - Bulk sends should **still** be cross-checked against Google Workspace's
   Email Log Search rather than trusting the WordPress admin counts. The reason
   is now Apps Script's own per-account `MailApp`/`GmailApp` daily quota
