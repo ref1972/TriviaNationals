@@ -295,15 +295,21 @@ and cannot be read over FTPS. Confirm in wp-admin that it still points at
     `/event-info/academic-bee-flight-a/` renders the same five. 5 x 5 still
     shows D and E; Trivia Spelling Bee (A-D), IQA (A, X, Y, C), Crossword
     Challenge (A, B), BP Titans (A, B), and both waiting lists are unchanged.
-  - **Mail sending is NOT yet re-verified.** This deploy also carried the
-    relay refactor onto production for the first time: plugin mail now goes
-    through `tn_tde_workspace_relay_request()` and the `wp_mail` fallback is
-    gone. The refactor posts to the same `tn_tde_signup_sheets_endpoint` and
-    deliberately keeps the secret in the body for backward compatibility, so
-    it is additive rather than a cutover — but no message has been sent since.
-    **Next step: trigger one real signup notification and confirm delivery.**
-    If it fails, mail no longer silently falls back, so the failure will be
-    visible rather than lost.
+  - **Mail sending re-verified 2026-08-05.** This deploy carried the relay
+    refactor onto production for the first time: plugin mail now goes through
+    `tn_tde_workspace_relay_request()` and the `wp_mail` fallback is gone. The
+    refactor posts to the same `tn_tde_signup_sheets_endpoint` and keeps the
+    secret in the body for backward compatibility, so it is additive rather
+    than a cutover. Confirmed by sending Attendee Email's "Send test email to
+    me" — the owner received it. That exercises the full changed path
+    (`send_to()` → `tn_tde_send_signup_email()` →
+    `tn_tde_workspace_relay_request()`) and, because the fallback is gone,
+    delivery could not have come from `wp_mail()` masking a relay failure.
+  - **What the test does not cover:** bulk/batch sends (still subject to the
+    Apps Script per-account daily quota — cross-check Workspace Email Log
+    Search), the Announcements plugin's separate sender, and *which* endpoint
+    the option points at. The last of those is still unconfirmed; see the
+    cutover blocker entry above.
   - While making this change, the per-session **"Full"** checkbox in the
     Schedule Manager was found to already do this job. It has existed since
     before the 5 x 5 work, gates only signup availability, and renders nothing
@@ -912,5 +918,6 @@ and cannot be read over FTPS. Confirm in wp-admin that it still points at
   ("Service invoked too many times for one day: email"), which is separate
   from Gmail account throttling and is often far below the documented
   1,500/day on newer accounts.
-- Mail behavior on production changed with the 2026-08-05 v4.1 deploy and
-  **no message has been sent since**. Treat the first real send as a test.
+- Mail behavior on production changed with the 2026-08-05 v4.1 deploy and was
+  verified the same day with a single-recipient test that was received. Bulk
+  sends are still unproven under the new sender.
