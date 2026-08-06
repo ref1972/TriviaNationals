@@ -104,6 +104,13 @@ Last human review: 2026-07-29.
   is off. Both deployed and hash-verified; **not yet functionally
   verified live** (requires an authenticated admin session or a real
   captain magic-link token — see docs/HANDOFF.md).
+- **WordPress mail still routes through Apps Script.** The destination is the
+  `tn_tde_signup_sheets_endpoint` option (wp-admin: "Apps Script web app URL");
+  no endpoint is hardcoded. The same option also drives the signup → Google
+  Sheets sync, which posts `event_signup_upsert`/`event_signup_delete` — actions
+  the droplet mail gateway rejects with `400 Unknown action`. Repointing that
+  single field at the gateway would therefore break signup syncing. See
+  docs/HANDOFF.md's 2026-08-05 blocker before attempting the cutover.
 - **Team Roster Google Sheets Sync** (`trivia-nationals-team-roster-sheets`,
   v1.2.0) is live and its source is tracked in `main` as of 2026-08-05,
   verified byte-identical to the production file over FTPS. Its Apps Script

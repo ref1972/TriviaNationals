@@ -2,6 +2,45 @@
 
 Last updated: 2026-08-05.
 
+## 2026-08-05 — BLOCKER: the WordPress mail cutover is not a one-field change
+
+**Do not move WordPress mail to the droplet gateway by repointing the existing
+endpoint setting. It would silently break the signup → Google Sheets sync.**
+
+`tn_tde_signup_sheets_endpoint` — the wp-admin field labeled "Apps Script web
+app URL" — is the **only** source of the destination URL. There is no
+hardcoded endpoint anywhere in the plugin. That single option feeds two
+different consumers:
+
+| Site | Consumer | Action posted |
+| --- | --- | --- |
+| `trivia-desc-editor.php:4257` | `tn_tde_workspace_relay_request()` → all plugin mail | `send_email` |
+| `trivia-desc-editor.php:6216` | `tn_tde_sync_event_signup()` → Google Sheets | `event_signup_upsert` / `event_signup_delete` |
+
+The droplet relay handles only `verify`, `email_quota`, and `send_email`, and
+returns `400 Unknown action` for anything else
+(`workspace-mail-relay/src/app.mjs:103`). So repointing that one field at the
+gateway would move mail *and* start failing every signup sync with a 400.
+Signups would keep being accepted on the site while quietly stopping to appear
+in the roster spreadsheet.
+
+Doing the cutover safely requires one of:
+
+1. a **separate** option for the mail endpoint, leaving the Sheets sync pointed
+   at Apps Script (smallest change, recommended); or
+2. teaching the relay the two `event_signup_*` actions and a Sheets write path
+   (larger, and puts spreadsheet writes behind the mail gateway's quota).
+
+Until then, WordPress mail is still going through Apps Script. The v4.1 deploy
+did **not** change the destination — it only changed the request shape (adds
+`Authorization: Bearer` and `X-Relay-Client`, keeps the body secret for Apps
+Script compatibility) and removed the `wp_mail` fallback. The gateway cutover
+so far is **Timed Quiz only**.
+
+**Unverified:** the runtime value of that option is in the WordPress database
+and cannot be read over FTPS. Confirm in wp-admin that it still points at
+`script.google.com` before relying on any of the above.
+
 ## 2026-08-02 — Timed Quiz completion mail verified on shared gateway
 
 - Shared gateway audit now contains eight `timed_quiz` attempts and eight
@@ -822,9 +861,18 @@ Last updated: 2026-08-05.
   deployment.
 - Test-email and attendee-send actions produce real external messages and
   require deliberate authorization.
-- The Apps Script relay used by both `tn_tde_send_signup_email()` and the
-  Announcements plugin's `send_to()` can silently fail over to
-  HostGator's `wp_mail()`, which returns `true` even when a message is
-  actually dropped. Any bulk send should be treated as unverified until
-  cross-checked against Google Workspace's Email Log Search, not just the
-  sender/failure counts shown in the WordPress admin screen.
+- **The silent `wp_mail()` fallback is gone as of v4.1 (deployed 2026-08-05).**
+  `tn_tde_send_signup_email()` now returns the relay's own result, and the
+  Announcements plugin's `send_to()` returns `ok:false` rather than falling
+  through. A failed send is now a visible failure instead of a false success.
+  Historically this fallback caused a real loss: of a 182-recipient send on
+  2026-07-29 only 106 reached Gmail, the rest dropped by HostGator's
+  `wp_mail()` returning `true`. That failure mode is closed.
+- Bulk sends should **still** be cross-checked against Google Workspace's
+  Email Log Search rather than trusting the WordPress admin counts. The reason
+  is now Apps Script's own per-account `MailApp`/`GmailApp` daily quota
+  ("Service invoked too many times for one day: email"), which is separate
+  from Gmail account throttling and is often far below the documented
+  1,500/day on newer accounts.
+- Mail behavior on production changed with the 2026-08-05 v4.1 deploy and
+  **no message has been sent since**. Treat the first real send as a test.
