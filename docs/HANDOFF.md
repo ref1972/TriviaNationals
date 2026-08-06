@@ -30,7 +30,27 @@ Deployed `trivia-nationals-announcements` 0.4.2 → **0.5.0**, checksum-verified
 - Post-deploy health checks: homepage and `/event-signups/` both HTTP 200, no
   PHP error text, and Academic Bee still lists exactly Flights A, E, H, I, J.
 - **Not verified:** no announcement has been sent through 0.5.0. The plugin's
-  own "send test digest to me" would exercise it.
+  own "send test digest to me" would exercise it. The post-deploy test that
+  *was* run used Attendee Email's "Send test email to me", which does not
+  touch this plugin.
+- **Delivery latency observed 2026-08-05.** A second Attendee Email test —
+  same button, same path as the one that arrived promptly an hour earlier —
+  showed green immediately but did not arrive for several minutes. It did
+  eventually arrive, from `info@trivianationals.org`, so nothing was lost.
+  - This is **not** the sender pacing itself. The WordPress path is
+    synchronous and unpaced: `GmailApp.sendEmail()` returns, the admin notice
+    goes green, and that is the whole transaction. The droplet relay has
+    pacing, but WordPress does not use it — it is still on Apps Script.
+  - The delay therefore happened entirely Gmail-side, after handoff. Treat it
+    as a possible throttling signal on the sending account, which is the same
+    family of problem as the SMTP-level send throttling found during the
+    2026-07-29 investigation. One slow message is not proof of anything, but
+    **it is not clearance for a bulk send either.**
+  - **Worth doing before any blast:** the Apps Script `send_email` response
+    already returns `remaining` (`MailApp.getRemainingDailyQuota()`), and
+    there is an `email_quota` action that returns it without sending. Both are
+    currently discarded by WordPress. Surfacing that number in the admin
+    notice would turn "green but slow" into an actionable reading.
 
 ## 2026-08-05 — Live mail plugin versions diverge from `main`
 
