@@ -2,6 +2,43 @@
 
 Last updated: 2026-08-05.
 
+## 2026-08-05 — Sender quota surfaced in the admin; both mail plugins deployed
+
+The Apps Script `send_email` response has always carried `remaining`
+(`MailApp.getRemainingDailyQuota()`), and `tn_tde_workspace_relay_request()`
+already returns the whole decoded payload — but both callers discarded it. It
+is now shown to the operator. No Event Schedule Manager change was needed.
+
+Deployed and checksum-verified:
+
+| Plugin | Was live | Now live |
+| --- | --- | --- |
+| Announcements | 0.5.0 | **0.5.1** (`3e382009…`) |
+| Attendee Email | **0.3.0** | **0.4.1** (`db9d9158…`) |
+
+Attendee Email had been three versions behind production for some time; this
+also closes that gap, so `main` and production now agree on every tracked
+plugin.
+
+- `remaining` is threaded through `send_to()` in both plugins as a nullable
+  int and rendered by a shared `remaining_note()` helper, so an unreported
+  value simply omits the sentence rather than printing "0" or "unknown".
+- It appears on: test-email success **and** failure notices, batch pause
+  messages (both quota and non-quota), and — in Attendee Email — the live
+  batch progress line, which now reads e.g. `Sent 40 of 180 — 812 sends left
+  today…`. That makes an approaching ceiling visible *during* a run instead of
+  at the moment it stops the send.
+- Motivation was the 2026-08-05 latency observation below: "green but slow"
+  was unreadable because the one number that would have explained it was being
+  thrown away.
+- Post-deploy: homepage and `/event-signups/` HTTP 200, no PHP error text,
+  Academic Bee still A/E/H/I/J.
+- **Not verified:** no send has been made through 0.5.1 or 0.4.1. The next
+  test email will be the first to display a quota figure — if the sentence is
+  missing entirely, the deployed Apps Script is not returning `remaining` and
+  its source should be compared against
+  `google-apps-script/event-signups/Code.gs`.
+
 ## 2026-08-05 — Announcements v0.5.0 deployed; wp_mail fallback fully closed
 
 Deployed `trivia-nationals-announcements` 0.4.2 → **0.5.0**, checksum-verified
@@ -61,18 +98,17 @@ plugins are **older in production than in `main`**:
 | Plugin | Live | In `main` | Note |
 | --- | --- | --- | --- |
 | Event Schedule Manager | 4.1 | 4.1 | in sync, deployed 2026-08-05 |
-| Attendee Email | 0.3.0 | newer | **still undeployed**; live copy delegates to `tn_tde_send_signup_email()` |
-| Announcements | 0.4.2 | newer | resolved later the same day — 0.5.0 deployed, see the entry above |
+| Attendee Email | 0.3.0 | newer | resolved later the same day — 0.4.1 deployed |
+| Announcements | 0.4.2 | newer | resolved later the same day — 0.5.1 deployed |
 
 Neither was broken — the live Attendee Email delegates into the schedule
 manager's sender and so picks up the v4.1 behavior for free, and the live
 0.4.2 Announcements plugin carried a self-contained Apps Script path that
 still worked (with its `wp_mail` fallback intact).
 
-**Announcements was subsequently deployed to 0.5.0 on 2026-08-05.** Attendee
-Email remains at 0.3.0 in production while `main` holds a newer copy — that
-one is still an unperformed step, though the live version behaves correctly by
-delegation and has no fallback exposure of its own.
+**Both were subsequently deployed the same day** — Announcements to 0.5.0 and
+then 0.5.1, Attendee Email straight from 0.3.0 to 0.4.1. As of 2026-08-05
+production and `main` agree on every tracked plugin.
 
 **For the mail test:** use Attendee Email's "Send test email to me" button.
 Live v0.3.0 routes it through `tn_tde_send_signup_email()` → v4.1's

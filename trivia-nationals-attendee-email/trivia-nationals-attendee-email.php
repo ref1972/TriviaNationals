@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Attendee Email
  * Description: Admin dashboard for emailing attendees who have purchased selected products (tickets, gift cards, etc.) or hold an allocated ticket.
- * Version: 0.4.0
+ * Version: 0.4.1
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -219,12 +219,19 @@ final class TN_Attendee_Email {
         return $html;
     }
 
-    /** @return array{ok:bool,error:string,quota_exhausted:bool} */
+    /**
+     * `remaining` is the sender's own reported leftover daily send capacity,
+     * passed straight through from the relay. It is null when the relay does
+     * not report one. Surfacing it is the difference between "the send went
+     * green" and knowing how much headroom is left before a bulk run.
+     *
+     * @return array{ok:bool,error:string,quota_exhausted:bool,remaining:?int}
+     */
     private static function send_to(string $email, string $subject, string $body_html, string $first_name): array {
         $subject = str_replace('{first_name}', $first_name, $subject);
         $html = self::render_email_html($body_html, $first_name);
         if (!function_exists('tn_tde_workspace_relay_request')) {
-            return ['ok' => false, 'error' => 'Workspace relay integration is unavailable.', 'quota_exhausted' => false];
+            return ['ok' => false, 'error' => 'Workspace relay integration is unavailable.', 'quota_exhausted' => false, 'remaining' => null];
         }
         $result = tn_tde_workspace_relay_request([
             'action' => 'send_email',
@@ -237,7 +244,16 @@ final class TN_Attendee_Email {
             'ok' => !empty($result['ok']),
             'error' => $error,
             'quota_exhausted' => !empty($result['quota_exhausted']) || stripos($error, 'quota') !== false || stripos($error, 'safety limit') !== false,
+            'remaining' => isset($result['remaining']) && is_numeric($result['remaining']) ? (int) $result['remaining'] : null,
         ];
+    }
+
+    /** Renders " N sends remaining today." for an admin notice, or '' if unknown. */
+    private static function remaining_note(?int $remaining): string {
+        if ($remaining === null) {
+            return '';
+        }
+        return ' Sender reports ' . number_format_i18n($remaining) . ' send' . ($remaining === 1 ? '' : 's') . ' remaining today.';
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -302,11 +318,13 @@ final class TN_Attendee_Email {
 
         $offset = max(0, absint($batch['next_offset'] ?? 0));
         $slice = array_slice($batch['recipients'], $offset, self::BATCH_SIZE);
+        $remaining = null;
         foreach ($slice as $recipient) {
             $result = self::send_to($recipient['email'], $batch['subject'], $batch['body'], $recipient['name']);
+            $remaining = $result['remaining'];
             if (!$result['ok']) {
                 wp_send_json_error([
-                    'message' => ($result['quota_exhausted'] ? 'The Workspace relay sending limit was reached.' : 'The Workspace relay did not accept the next message.') . ' The send paused without advancing that recipient: ' . $result['error'],
+                    'message' => ($result['quota_exhausted'] ? 'The Workspace relay sending limit was reached.' : 'The Workspace relay did not accept the next message.') . ' The send paused without advancing that recipient: ' . $result['error'] . self::remaining_note($result['remaining']),
                 ]);
             }
             $batch['sent']++;
@@ -332,6 +350,9 @@ final class TN_Attendee_Email {
             'total' => $total,
             'next_offset' => $next_offset,
             'done' => $done,
+            // Reported by the sender after the last message in this slice, so
+            // a long run shows its own headroom shrinking in real time.
+            'remaining' => $remaining,
         ]);
     }
 
@@ -349,9 +370,9 @@ final class TN_Attendee_Email {
         $first_name = trim($user->first_name) !== '' ? trim($user->first_name) : 'there';
         $result = self::send_to($user->user_email, '[TEST] ' . $subject, $body, $first_name);
         if ($result['ok']) {
-            wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . '.']);
+            wp_send_json_success(['message' => 'Test email sent to ' . $user->user_email . '.' . self::remaining_note($result['remaining'])]);
         }
-        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error']]);
+        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error'] . self::remaining_note($result['remaining'])]);
     }
 
     private static function append_log(string $subject, string $targets, int $total, int $sent, int $failed): void {
@@ -576,11 +597,17 @@ final class TN_Attendee_Email {
                             document.getElementById('tn_ae_resume_btn').style.display = 'inline-block';
                             return;
                         }
+                        // Sender-reported headroom, shown live so a long run
+                        // makes an approaching quota ceiling visible before it
+                        // stops the send rather than after.
+                        var quotaNote = (res.data.remaining === null || typeof res.data.remaining === 'undefined')
+                            ? ''
+                            : ' — ' + res.data.remaining + ' sends left today';
                         bar.value = res.data.sent + res.data.failed;
-                        text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + '…';
+                        text.textContent = 'Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (' (' + res.data.failed + ' failed)') : '') + quotaNote + '…';
                         if (res.data.done) {
                             forgetBatch();
-                            text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + '.';
+                            text.textContent = 'Done. Sent ' + res.data.sent + ' of ' + res.data.total + (res.data.failed ? (', ' + res.data.failed + ' failed') : '') + quotaNote + '.';
                             setStatus('Send complete.');
                             document.getElementById('tn_ae_send_btn').disabled = false;
                             window.location.reload();

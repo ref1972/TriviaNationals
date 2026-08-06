@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals Announcements
  * Description: Admin-authored announcements with a public list page and a full-body email digest tool for attendees.
- * Version: 0.5.0
+ * Version: 0.5.1
  * Author: Trivia Nationals
  * Requires Plugins: woocommerce
  */
@@ -432,6 +432,7 @@ final class TN_Announcements {
                 'ok' => !empty($result['ok']),
                 'error' => empty($result['error']) ? '' : (string) $result['error'],
                 'quota_exhausted' => !empty($result['quota_exhausted']),
+                'remaining' => isset($result['remaining']) && is_numeric($result['remaining']) ? (int) $result['remaining'] : null,
             ];
         }
         $endpoint = trim((string) get_option('tn_tde_signup_sheets_endpoint'));
@@ -459,11 +460,12 @@ final class TN_Announcements {
         }
         $body = is_wp_error($response) ? '' : wp_remote_retrieve_body($response);
         $result = json_decode($body, true);
+        $remaining = is_array($result) && isset($result['remaining']) && is_numeric($result['remaining']) ? (int) $result['remaining'] : null;
         if ($code >= 200 && $code < 300 && is_array($result) && !empty($result['ok'])) {
-            return ['ok' => true, 'error' => '', 'quota_exhausted' => false];
+            return ['ok' => true, 'error' => '', 'quota_exhausted' => false, 'remaining' => $remaining];
         }
         $error = is_array($result) && !empty($result['error']) ? (string) $result['error'] : ('Unknown error (HTTP ' . $code . ').');
-        return ['ok' => false, 'error' => $error, 'quota_exhausted' => !empty($result['quota_exhausted'])];
+        return ['ok' => false, 'error' => $error, 'quota_exhausted' => !empty($result['quota_exhausted']), 'remaining' => $remaining];
     }
 
     /**
@@ -487,11 +489,20 @@ final class TN_Announcements {
      */
     private static function send_to(string $email, string $subject, string $html): array {
         $relay = self::send_via_apps_script($email, $subject, $html);
+        $remaining = $relay['remaining'] ?? null;
         if ($relay['ok']) {
-            return ['ok' => true, 'via' => 'workspace_relay', 'quota_exhausted' => false, 'error' => ''];
+            return ['ok' => true, 'via' => 'workspace_relay', 'quota_exhausted' => false, 'error' => '', 'remaining' => $remaining];
         }
         $quota_exhausted = !empty($relay['quota_exhausted']) || stripos($relay['error'], 'too many times') !== false || stripos($relay['error'], 'quota') !== false || stripos($relay['error'], 'safety limit') !== false;
-        return ['ok' => false, 'via' => 'workspace_relay', 'quota_exhausted' => $quota_exhausted, 'error' => $relay['error']];
+        return ['ok' => false, 'via' => 'workspace_relay', 'quota_exhausted' => $quota_exhausted, 'error' => $relay['error'], 'remaining' => $remaining];
+    }
+
+    /** Renders " Sender reports N sends remaining today." for an admin notice, or '' if unknown. */
+    private static function remaining_note(?int $remaining): string {
+        if ($remaining === null) {
+            return '';
+        }
+        return ' Sender reports ' . number_format_i18n($remaining) . ' send' . ($remaining === 1 ? '' : 's') . ' remaining today.';
     }
 
     // ─── AJAX handlers ───────────────────────────────────────────────────────
@@ -639,13 +650,13 @@ final class TN_Announcements {
                 // them once the quota resets (typically around midnight
                 // Pacific Time), rather than skipping them as "done."
                 wp_send_json_error([
-                    'message' => 'The Workspace relay sending limit was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. Use "Resume interrupted send" only after capacity is available.',
+                    'message' => 'The Workspace relay sending limit was reached, so this send is paused after ' . $batch['next_offset'] . ' of ' . count($batch['recipients']) . '. Use "Resume interrupted send" only after capacity is available.' . self::remaining_note($result['remaining']),
                 ]);
             }
 
             if (!$result['ok']) {
                 wp_send_json_error([
-                    'message' => 'The Workspace relay did not accept the next message, so the send paused without advancing that recipient: ' . $result['error'],
+                    'message' => 'The Workspace relay did not accept the next message, so the send paused without advancing that recipient: ' . $result['error'] . self::remaining_note($result['remaining']),
                 ]);
             }
 
@@ -697,12 +708,12 @@ final class TN_Announcements {
         }
         $result = self::send_to($user->user_email, '[TEST] ' . self::digest_subject($published_ids), self::assemble_digest_html($published_ids));
         if ($result['ok']) {
-            wp_send_json_success(['message' => 'Test email accepted by the Workspace relay for ' . $user->user_email . '.']);
+            wp_send_json_success(['message' => 'Test email accepted by the Workspace relay for ' . $user->user_email . '.' . self::remaining_note($result['remaining'])]);
         }
         if (!empty($result['quota_exhausted'])) {
-            wp_send_json_error(['message' => 'The Workspace relay sending limit was reached, so the test could not be sent.']);
+            wp_send_json_error(['message' => 'The Workspace relay sending limit was reached, so the test could not be sent.' . self::remaining_note($result['remaining'])]);
         }
-        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error']]);
+        wp_send_json_error(['message' => 'The test email could not be sent: ' . $result['error'] . self::remaining_note($result['remaining'])]);
     }
 
     // ─── Sent tracking ───────────────────────────────────────────────────────
