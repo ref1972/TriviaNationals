@@ -104,6 +104,14 @@ Last human review: 2026-07-29.
   is off. Both deployed and hash-verified; **not yet functionally
   verified live** (requires an authenticated admin session or a real
   captain magic-link token — see docs/HANDOFF.md).
+- **Team Roster Google Sheets Sync** (`trivia-nationals-team-roster-sheets`,
+  v1.2.0) is live and its source is tracked in `main` as of 2026-08-05,
+  verified byte-identical to the production file over FTPS. Its Apps Script
+  counterpart is `google-apps-script/team-roster/Code.gs`. Until 2026-08-05
+  this plugin ran in production with no copy in `main` at all — it existed
+  only on the unmerged `agent/sync-live-production` branch. **That branch
+  still must not be merged**: its `trivia-desc-editor.php` is a v2.0 fossil
+  that would revert the live v4.1 Event Schedule Manager.
 - **Live drift discovered 2026-07-29**: production was already running a
   generalized waitlist feature (`tn_tde_signup_is_waitlist_event()`,
   covering Quiz Bowl in addition to "All Trivia: The Gathering") not

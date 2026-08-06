@@ -9,11 +9,14 @@
 /photos/
 /snapshots/
 
-# Local or secret-bearing Apps Script working copies. The reviewed event-signups
-# source remains tracked explicitly.
+# Local or secret-bearing Apps Script working copies. Reviewed sources are
+# tracked explicitly, one opt-in per project. Each was checked to read its
+# shared secret from PropertiesService rather than embedding it.
 /google-apps-script/*
 !/google-apps-script/event-signups/
 !/google-apps-script/event-signups/Code.gs
+!/google-apps-script/team-roster/
+!/google-apps-script/team-roster/Code.gs
 
 # Tool-specific local settings; shared instructions and commands are tracked.
 /.claude/settings.local.json

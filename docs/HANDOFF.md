@@ -183,6 +183,35 @@ Last updated: 2026-08-05.
 
 ## Recently completed
 
+- 2026-08-05: **Roster sync source rescued into `main`.** The Team Roster
+  Google Sheets Sync plugin had been running in production since 2026-07-29
+  while existing in Git *only* on the unmerged branch
+  `agent/sync-live-production` (draft PR #1). `main` is no longer missing live
+  code.
+  - The live file was fetched over FTPS and is **byte-identical** to the
+    branch copy (`56da6b48…`, v1.2.0). An earlier note claiming production ran
+    v1.1.0 was stale — branch and production agree exactly.
+  - **The branch itself must never be merged.** Its copy of
+    `trivia-desc-editor-restored/trivia-desc-editor.php` is **v2.0** with no
+    flight-allowlist code at all; merging would revert the Event Schedule
+    Manager from the live v4.1 and undo months of work. Only three files on
+    that branch are absent from `main`, and they were picked individually:
+    - `trivia-nationals-team-roster-sheets/…php` → taken, verified against live.
+    - `team-roster-google-apps-script.gs` → taken, re-homed to
+      `google-apps-script/team-roster/Code.gs` to match the existing
+      convention, with a matching `.gitignore` opt-in. Scanned first: it reads
+      `ROSTER_SHARED_SECRET` from `PropertiesService` and embeds no secret.
+    - root `DEPLOYMENT.md` → **not** taken; superseded by `docs/DEPLOYMENT.md`,
+      which already documents the same host, port, and TLS 1.2 workaround. The
+      one fact it had that `main` lacked — the roster plugin's remote path —
+      has been folded into `docs/DEPLOYMENT.md` instead.
+  - `scripts/wp-plugin-ftps.sh` still only handles the Event Schedule Manager;
+    roster deploys remain manual. **Not done:** teaching the script a second
+    target, and verifying the tracked `Code.gs` against the deployed Apps
+    Script (which cannot be read over FTPS).
+  - PR #1's unique content is now preserved in `main`, so the PR and branch can
+    be retired whenever you want — left open pending your call.
+
 - 2026-08-05: **Academic Bee Flight A reopened** — the allowlist is now A, E,
   H, I, J. **Deployed and live-verified**; production is now on v4.1 and
   repo/production are byte-identical again.

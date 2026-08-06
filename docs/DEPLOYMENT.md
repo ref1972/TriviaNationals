@@ -13,6 +13,28 @@
 - Other WordPress plugins have been deployed through versioned ZIP upload in
   WordPress when FTP was unreliable. Confirm current live version and take a
   recoverable backup before replacement.
+
+### Tracked production plugins and their remote paths
+
+The FTPS account opens in WordPress's `wp-content` directory, so remote paths
+are relative to it:
+
+| Plugin | Remote path | Deploy helper |
+| --- | --- | --- |
+| Event Schedule Manager | `plugins/trivia-desc-editor-restored/trivia-desc-editor.php` | `scripts/wp-plugin-ftps.sh` |
+| Team Roster Google Sheets Sync | `plugins/trivia-nationals-team-roster-sheets/trivia-nationals-team-roster-sheets.php` | none — manual, see below |
+
+`scripts/wp-plugin-ftps.sh` is hardcoded to the Event Schedule Manager and
+**does not** handle the roster sync plugin. Deploying that one is manual;
+follow the same discipline the script enforces — fetch the live file, diff it,
+back it up, upload, then re-fetch and compare checksums. Verified 2026-08-05:
+the tracked copy is byte-identical to the live file
+(`56da6b48ee70a44540ae8e638e155783c5d0acba5cdaa412bc74d573961445fe`).
+
+The roster sync's Apps Script counterpart is
+`google-apps-script/team-roster/Code.gs`, deployed by hand in the Apps Script
+editor. Its shared secret lives in Script Properties as `ROSTER_SHARED_SECRET`
+and must never be committed.
 - The `tndeploy` account can also reach other plugins directly as plain files
   under `plugins/<slug>/`, confirmed 2026-07-28 for
   `plugins/trivia-nationals-my-tickets/trivia-nationals-my-tickets.php` — no
