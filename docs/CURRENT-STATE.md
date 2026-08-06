@@ -168,7 +168,13 @@ Last human review: 2026-07-29.
   Existing stored signups are never modified. Current allowlists:
   - **5 x 5**: Flights D and E. Deployed and live-verified 2026-07-30.
   - **Academic Bee**: Flights A, E, H, I, and J (B-D, F, and G removed as those
-    flights filled). Flight A was reopened 2026-08-05.
+    flights filled). Flight A was reopened, deployed, and live-verified
+    2026-08-05.
+
+  Production runs **Event Schedule Manager v4.1**, byte-identical to `main` as
+  of 2026-08-05. The earlier 4.0/4.0 version collision is resolved: the live
+  file was diffed over FTPS before the v4.1 deploy and carried no drift beyond
+  the two expected differences.
 
   **This allowlist duplicates an older, more general mechanism and should be
   retired.** The Schedule Manager already has a per-session **"Full"**

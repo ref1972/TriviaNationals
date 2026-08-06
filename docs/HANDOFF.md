@@ -184,9 +184,33 @@ Last updated: 2026-08-05.
 ## Recently completed
 
 - 2026-08-05: **Academic Bee Flight A reopened** — the allowlist is now A, E,
-  H, I, J. Source-only so far; **not yet deployed** (see the deployment
-  caveat in the 2026-07-31 entry below — the committed v4.1 also carries the
-  untested relay refactor).
+  H, I, J. **Deployed and live-verified**; production is now on v4.1 and
+  repo/production are byte-identical again.
+  - Pre-deploy, the live file was fetched and diffed against `main`
+    (`scripts/wp-plugin-ftps.sh diff`). It differed in **exactly three**
+    places: the version string, the missing `flight-a`, and the absent relay
+    refactor. **No unknown drift** — no direct wp-admin edits, nothing
+    undocumented. That retired the open question from the 2026-07-31 entry:
+    production was unambiguously "the Academic Bee 4.0", and `main` was a
+    strict superset of it.
+  - Deploy backed up the pre-deploy live file to
+    `backups/trivia-desc-editor/trivia-desc-editor.php.20260805-224616.bak`
+    and verified the upload by checksum
+    (`edc2ad00ab5d97c1fab25861713ba9ea9a41f3008eaf57ac5a5b081438dc5076`).
+  - **Live-verified on both signup surfaces**: the `/event-signups/` payload
+    lists exactly Flight A, E, H, I, J for Academic Bee, and
+    `/event-info/academic-bee-flight-a/` renders the same five. 5 x 5 still
+    shows D and E; Trivia Spelling Bee (A-D), IQA (A, X, Y, C), Crossword
+    Challenge (A, B), BP Titans (A, B), and both waiting lists are unchanged.
+  - **Mail sending is NOT yet re-verified.** This deploy also carried the
+    relay refactor onto production for the first time: plugin mail now goes
+    through `tn_tde_workspace_relay_request()` and the `wp_mail` fallback is
+    gone. The refactor posts to the same `tn_tde_signup_sheets_endpoint` and
+    deliberately keeps the secret in the body for backward compatibility, so
+    it is additive rather than a cutover — but no message has been sent since.
+    **Next step: trigger one real signup notification and confirm delivery.**
+    If it fails, mail no longer silently falls back, so the failure will be
+    visible rather than lost.
   - While making this change, the per-session **"Full"** checkbox in the
     Schedule Manager was found to already do this job. It has existed since
     before the 5 x 5 work, gates only signup availability, and renders nothing
