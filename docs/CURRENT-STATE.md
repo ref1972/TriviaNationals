@@ -167,8 +167,20 @@ Last human review: 2026-07-29.
   from newly generated options; an event with no entry keeps all its flights.
   Existing stored signups are never modified. Current allowlists:
   - **5 x 5**: Flights D and E. Deployed and live-verified 2026-07-30.
-  - **Academic Bee**: Flights E, H, I, and J (A-D, F, and G removed as those
-    flights filled). Deployed and live-verified 2026-07-31.
+  - **Academic Bee**: Flights A, E, H, I, and J (B-D, F, and G removed as those
+    flights filled). Flight A was reopened 2026-08-05.
+
+  **This allowlist duplicates an older, more general mechanism and should be
+  retired.** The Schedule Manager already has a per-session **"Full"**
+  checkbox; `tn_tde_signup_flight_options_for_event()` skips any session
+  flagged full, and the flag has no other public effect. The two filters are
+  ANDed, so while the allowlist exists the admin checkbox cannot reopen a
+  flight the allowlist omits. Confirmed against the live schedule 2026-08-05:
+  every Academic Bee flight (A-J) is its own session, so the checkbox alone
+  gives exact per-flight control there. 5 x 5 is coarser — "Flight A & B" and
+  "Flight D & E" each share one session — but its current open/closed split
+  falls on session boundaries, so the checkbox can express that too. Closing
+  D while keeping E open would require splitting that session first.
 
   The allowlist is enforced on both signup surfaces at once, because the
   `/event-signups/` page and the per-event `/event-info/` form both build their

@@ -3321,7 +3321,7 @@ function tn_tde_signup_open_flight_keys( $event ) {
 		return [ 'flight-d', 'flight-e' ];
 	}
 	if ( tn_tde_signup_title_matches( $title, [ 'Academic Bee' ] ) ) {
-		return [ 'flight-e', 'flight-h', 'flight-i', 'flight-j' ];
+		return [ 'flight-a', 'flight-e', 'flight-h', 'flight-i', 'flight-j' ];
 	}
 	return null;
 }

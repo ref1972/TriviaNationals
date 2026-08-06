@@ -183,6 +183,26 @@ Last updated: 2026-08-05.
 
 ## Recently completed
 
+- 2026-08-05: **Academic Bee Flight A reopened** — the allowlist is now A, E,
+  H, I, J. Source-only so far; **not yet deployed** (see the deployment
+  caveat in the 2026-07-31 entry below — the committed v4.1 also carries the
+  untested relay refactor).
+  - While making this change, the per-session **"Full"** checkbox in the
+    Schedule Manager was found to already do this job. It has existed since
+    before the 5 x 5 work, gates only signup availability, and renders nothing
+    publicly. The hardcoded allowlist is redundant with it.
+  - **The two filters are ANDed**, so the allowlist wins: unticking "Full" on
+    a flight the allowlist omits does nothing. The admin checkbox cannot serve
+    as the control surface until `tn_tde_signup_open_flight_keys()` is deleted.
+  - Verified against the live `/full-schedule/` on 2026-08-05: Academic Bee
+    lists all ten flights A-J as separate sessions, so the checkbox gives exact
+    per-flight control. 5 x 5 shares sessions ("Flight A & B", "Flight D & E"),
+    which still expresses today's split but could not close D while keeping E.
+  - **Next step, not yet done:** set the Full flags in the admin to match the
+    intended state for both events, confirm the resulting option lists, and
+    only then delete the allowlist in a single commit. Removing it before the
+    flags are set would immediately expose every closed flight.
+
 - 2026-07-31: **Academic Bee signup options restricted to Flights E, H, I,
   and J**, deployed and live-verified. Flights A-D, F, and G had filled and
   were removed at the owner's request; Academic Bee had been offering A
