@@ -2,6 +2,31 @@
 
 Last updated: 2026-08-05.
 
+## 2026-08-05 — Live mail plugin versions diverge from `main`
+
+Checked over FTPS while preparing the post-deploy mail test. Only the Event
+Schedule Manager was deployed on 2026-08-05; the other two mail-sending
+plugins are **older in production than in `main`**:
+
+| Plugin | Live | In `main` | Note |
+| --- | --- | --- | --- |
+| Event Schedule Manager | 4.1 | 4.1 | in sync, deployed 2026-08-05 |
+| Attendee Email | 0.3.0 | newer | undeployed; live copy delegates to `tn_tde_send_signup_email()` |
+| Announcements | 0.4.2 | newer | undeployed; live copy still has the `wp_mail` fallback |
+
+Neither is broken — the live Attendee Email delegates into the schedule
+manager's sender and so picks up the v4.1 behavior for free, and the live
+Announcements plugin carries a self-contained Apps Script path that still
+works. But `main` is ahead of production for both, so "the repo matches
+production" is true **only** for the Event Schedule Manager and the roster
+sync. Deploying either of the other two is a separate, unperformed step.
+
+**For the mail test:** use Attendee Email's "Send test email to me" button.
+Live v0.3.0 routes it through `tn_tde_send_signup_email()` → v4.1's
+`tn_tde_workspace_relay_request()`, which is exactly the code path that
+changed on 2026-08-05, and it sends only to the logged-in admin's own address
+without creating any signup record.
+
 ## 2026-08-05 — BLOCKER: the WordPress mail cutover is not a one-field change
 
 **Do not move WordPress mail to the droplet gateway by repointing the existing
@@ -861,13 +886,26 @@ and cannot be read over FTPS. Confirm in wp-admin that it still points at
   deployment.
 - Test-email and attendee-send actions produce real external messages and
   require deliberate authorization.
-- **The silent `wp_mail()` fallback is gone as of v4.1 (deployed 2026-08-05).**
-  `tn_tde_send_signup_email()` now returns the relay's own result, and the
-  Announcements plugin's `send_to()` returns `ok:false` rather than falling
-  through. A failed send is now a visible failure instead of a false success.
-  Historically this fallback caused a real loss: of a 182-recipient send on
-  2026-07-29 only 106 reached Gmail, the rest dropped by HostGator's
-  `wp_mail()` returning `true`. That failure mode is closed.
+- **The silent `wp_mail()` fallback is only partly gone.** Verified against the
+  live files 2026-08-05 — the three mail-sending plugins are at *different*
+  versions in production, and only one was deployed:
+  - **Event Schedule Manager v4.1** (deployed 2026-08-05): fallback removed.
+    `tn_tde_send_signup_email()` returns the relay result and nothing else.
+  - **Attendee Email v0.3.0** (live; `main` has a newer, undeployed copy):
+    its `send_to()` delegates to `tn_tde_send_signup_email()` when that
+    function exists, so it **inherits** the no-fallback behavior from v4.1.
+    Its own `wp_mail()` call is now dead code, reachable only if the Event
+    Schedule Manager plugin is deactivated.
+  - **Announcements v0.4.2** (live; `main` has a newer, undeployed copy):
+    **still falls back to `wp_mail()`.** It carries its own copy of the relay
+    logic, posts to Apps Script directly with the old payload shape, and on a
+    non-quota failure drops through to `wp_mail()` and reports
+    `via: wp_mail_fallback`. Today's deploy did not change this. Announcement
+    sends remain exposed to the false-success failure mode.
+
+  That failure mode is real: of a 182-recipient send on 2026-07-29 only 106
+  reached Gmail; the rest were dropped by HostGator's `wp_mail()` returning
+  `true`. It is closed for signup mail, still open for announcements.
 - Bulk sends should **still** be cross-checked against Google Workspace's
   Email Log Search rather than trusting the WordPress admin counts. The reason
   is now Apps Script's own per-account `MailApp`/`GmailApp` daily quota
