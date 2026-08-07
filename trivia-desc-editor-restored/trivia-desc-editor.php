@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Trivia Nationals – Event Schedule Manager
  * Description: Admin editor for homepage event schedule — descriptions, titles, times, and tags. Includes a Schedule Mode toggle that shows times on the public site.
- * Version: 4.1
+ * Version: 4.2
  * Author: Trivia Nationals
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -4313,11 +4313,17 @@ function tn_tde_handle_email_signup_summary() {
 		wp_safe_redirect( add_query_arg( 'tn_lookup', 'invalid', $redirect ) );
 		exit;
 	}
+	$signups = tn_tde_signup_summary_rows_for_email( $email );
+	if ( is_wp_error( $signups ) ) {
+		error_log( 'Trivia Nationals signup summary lookup failed: ' . $signups->get_error_message() );
+		wp_safe_redirect( add_query_arg( 'tn_lookup', 'error', $redirect ) );
+		exit;
+	}
 	$manage_token = tn_tde_issue_manage_signups_token( $email );
 	$sent = tn_tde_send_signup_email(
 		$email,
 		'Your Trivia Nationals 2026 event signups',
-		tn_tde_signup_summary_email_html( tn_tde_signup_summary_rows_for_email( $email ), $manage_token ? tn_tde_manage_signups_url( $manage_token ) : '' )
+		tn_tde_signup_summary_email_html( $signups, $manage_token ? tn_tde_manage_signups_url( $manage_token ) : '' )
 	);
 	$status = $sent ? 'sent' : 'error';
 	wp_safe_redirect( add_query_arg( 'tn_lookup', $status, $redirect ) );
@@ -4325,60 +4331,18 @@ function tn_tde_handle_email_signup_summary() {
 }
 
 function tn_tde_signup_summary_rows_for_email( $email ) {
-	$ids = get_posts( [
-		'post_type' => 'tn_tde_signup',
-		'post_status' => 'private',
-		'posts_per_page' => -1,
-		'fields' => 'ids',
-		'orderby' => 'date',
-		'order' => 'ASC',
-		'no_found_rows' => true,
-		'meta_query' => [
-			'relation' => 'AND',
-			[
-				'key' => '_tn_tde_signup_email',
-				'value' => sanitize_email( $email ),
-				'compare' => '=',
-			],
-			[
-				'relation' => 'OR',
-				[
-					'key' => '_tn_tde_signup_status',
-					'value' => 'active',
-					'compare' => '=',
-				],
-				[
-					'key' => '_tn_tde_signup_status',
-					'compare' => 'NOT EXISTS',
-				],
-			],
-		],
+	$result = tn_tde_workspace_relay_request( [
+		'action' => 'event_signup_summary_lookup',
+		'email'  => sanitize_email( $email ),
 	] );
-	$fields = [
-		'event_title',
-		'event_session',
-		'event_day',
-		'event_date',
-		'event_start',
-		'event_end',
-		'event_location',
-		'name',
-		'email',
-		'flight',
-		'team',
-		'team_members',
-		'notes',
-		'status',
-		'status_changed_at',
-		'status_reason',
-	];
-	return array_map( static function( $id ) use ( $fields ) {
-		$row = [];
-		foreach ( $fields as $field ) {
-			$row[ $field ] = (string) get_post_meta( $id, '_tn_tde_signup_' . $field, true );
-		}
-		return $row;
-	}, $ids );
+	if ( empty( $result['ok'] ) ) {
+		$message = ! empty( $result['error'] ) ? sanitize_text_field( $result['error'] ) : 'The Signups spreadsheet lookup failed.';
+		return new WP_Error( 'tn_tde_signup_summary_lookup_failed', $message );
+	}
+	if ( ! isset( $result['signups'] ) || ! is_array( $result['signups'] ) ) {
+		return new WP_Error( 'tn_tde_signup_summary_lookup_invalid', 'The Signups spreadsheet returned an invalid response.' );
+	}
+	return array_values( array_filter( $result['signups'], 'is_array' ) );
 }
 
 function tn_tde_signup_summary_email_html( $signups, $manage_url = '' ) {

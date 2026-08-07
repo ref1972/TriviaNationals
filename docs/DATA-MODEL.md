@@ -22,6 +22,11 @@
 
 - Event Schedule Manager uses the `tn_tde_signup` custom post type and connected
   Google Apps Script/Sheet workflows.
+- The **Signups** sheet is the source for attendee-facing "Your Trivia
+  Nationals 2026 event signups" email contents. WordPress requests matching
+  rows through the Apps Script `event_signup_summary_lookup` action, then adds
+  the WordPress-managed secure management link and sends the existing branded
+  email through the relay.
 - The current Knock Out event matcher supports both `Knock Out Quiz with Steve
   Perry` and the former `IQA Knock Out Quiz with Steve Perry`.
 

@@ -111,6 +111,14 @@ Last human review: 2026-07-29.
   the droplet mail gateway rejects with `400 Unknown action`. Repointing that
   single field at the gateway would therefore break signup syncing. See
   docs/HANDOFF.md's 2026-08-05 blocker before attempting the cutover.
+- **Event signup summary emails now read from the Signups spreadsheet tab.**
+  Event Schedule Manager v4.2 calls the existing Apps Script
+  `event_signup_summary_lookup` action, renders the returned rows with the
+  existing branded WordPress template and secure management link, then sends
+  through the existing relay. A failed Sheet lookup sends nothing instead of
+  falling back to WordPress metadata. Deployed and checksum-verified
+  2026-08-07; homepage and `/event-signups/` return HTTP 200. A real summary
+  email has not yet been sent through v4.2.
 - **Team Roster Google Sheets Sync** (`trivia-nationals-team-roster-sheets`,
   v1.2.0) is live and its source is tracked in `main` as of 2026-08-05,
   verified byte-identical to the production file over FTPS. Its Apps Script
@@ -186,10 +194,10 @@ Last human review: 2026-07-29.
     flights filled). Flight A was reopened, deployed, and live-verified
     2026-08-05.
 
-  Production runs **Event Schedule Manager v4.1**, byte-identical to `main` as
-  of 2026-08-05. The earlier 4.0/4.0 version collision is resolved: the live
-  file was diffed over FTPS before the v4.1 deploy and carried no drift beyond
-  the two expected differences.
+  Production runs **Event Schedule Manager v4.2**, byte-identical to the local
+  source as of 2026-08-07. The earlier 4.0/4.0 version collision is resolved: the live
+  file was diffed over FTPS before deployment and the uploaded checksum was
+  verified.
 
   **This allowlist duplicates an older, more general mechanism and should be
   retired.** The Schedule Manager already has a per-session **"Full"**

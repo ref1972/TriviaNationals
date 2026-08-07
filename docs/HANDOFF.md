@@ -1,6 +1,32 @@
 # Current handoff
 
-Last updated: 2026-08-05.
+Last updated: 2026-08-07.
+
+## 2026-08-07 — Signup summary email switched to Signups sheet and deployed
+
+- Event Schedule Manager source is bumped from 4.1 to **4.2**.
+- The public "Email My Signups" flow now calls the existing Apps Script
+  `event_signup_summary_lookup` action and uses the returned rows from the
+  spreadsheet's **Signups** tab to render the email.
+- The existing WordPress-generated branded HTML, Gmail relay delivery, and
+  secure `/manage-signups/` link are preserved.
+- A failed or malformed spreadsheet response stops the flow, records a PHP
+  error, and redirects with the existing error status. It deliberately does
+  not fall back to WordPress because manually corrected Sheet data is intended
+  to be authoritative for these emails.
+- No Apps Script source change or redeploy is needed; the required lookup
+  action is already present.
+- PHP syntax, checkpoint safety, and diff whitespace checks pass. Deployed
+  through the scoped FTPS helper; the post-upload file is checksum-verified as
+  `2112228ced5894c1ae1723da2c414f258c9311237fd4e0c2bb7a7cf707e739c7`.
+  The homepage and `/event-signups/` both return HTTP 200 with no PHP error
+  text. The pre-deploy live file is retained in the ignored backups directory.
+- The live comparison also exposed a missing `exit` after the invalid-email
+  redirect even though that guard was already present in tracked v4.1 source;
+  deploying v4.2 restored it and prevents invalid input from continuing.
+- **Not yet functionally verified:** no real summary email was sent during the
+  deploy. Submit "Email My Signups" for a known signup address and confirm a
+  deliberately edited Sheet value appears in the received message.
 
 ## 2026-08-05 — Sender quota surfaced in the admin; both mail plugins deployed
 
